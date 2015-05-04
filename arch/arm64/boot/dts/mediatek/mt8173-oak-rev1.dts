@@ -20,6 +20,30 @@
 	compatible = "google,oak-rev1", "google,oak", "mediatek,mt8173";
 };
 
+&cpu2 {
+	proc-supply = <&da9211_vcpu_reg>;
+	operating-points = <
+		507000  828000
+		702000  867000
+		1001000 927000
+		1209000 968000
+		1404000 1007000
+		1612000 1049000
+	>;
+};
+
+&cpu3 {
+	proc-supply = <&da9211_vcpu_reg>;
+	operating-points = <
+		507000  828000
+		702000  867000
+		1001000 927000
+		1209000 968000
+		1404000 1007000
+		1612000 1049000
+	>;
+};
+
 &i2c1 {
 	da9211: da9211@68 {
 		compatible = "dlg,da9211";

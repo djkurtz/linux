@@ -20,6 +20,14 @@
 	compatible = "google,oak-rev2", "google,oak", "mediatek,mt8173";
 };
 
+&cpu2 {
+	proc-supply = <&da9211_vcpu_reg>;
+};
+
+&cpu3 {
+	proc-supply = <&da9211_vcpu_reg>;
+};
+
 &i2c1 {
 	da9211: da9211@68 {
 		compatible = "dlg,da9211";
