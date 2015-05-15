@@ -153,6 +153,11 @@
 	sram-supply = <&mt6397_vsramca7_reg>;
 };
 
+&gpu {
+	mfgsys-power-supply = <&mt6397_vgpu_reg>;
+	status = "okay";
+};
+
 &i2c0 {
 	status = "okay";
 
