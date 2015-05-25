@@ -199,6 +199,14 @@
 	status = "okay";
 };
 
+&hdmi0 {
+	max_hdisplay = <1920>;
+	max_vdisplay = <1200>;
+	ibias = <0x2e>;
+	flt_n_5v-gpios = <&pio 42 GPIO_ACTIVE_HIGH>;  /* flt_n_5v */
+	status = "okay";
+};
+
 &i2c0 {
 	status = "okay";
 
