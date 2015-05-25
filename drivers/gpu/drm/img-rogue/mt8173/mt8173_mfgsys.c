@@ -30,12 +30,17 @@
 struct regulator *g_vgpu;
 struct clk *g_mmpll;
 
-static struct clk *g_mfgclk_mem_in_sel;
-static struct clk *g_mfgclk_axi_in_sel;
-static struct clk *g_mfgclk_axi;
-static struct clk *g_mfgclk_mem;
-static struct clk *g_mfgclk_g3d;
-static struct clk *g_mfgclk_26m;
+
+static char *top_mfg_clk_name[] ={
+	"mfg_mem_in_sel",
+	"mfg_axi_in_sel",
+	"top_axi",
+	"top_mem",
+	"top_mfg",
+};
+#define MAX_TOP_MFG_CLK ARRAY_SIZE(top_mfg_clk_name)
+static struct clk *g_top_clk[MAX_TOP_MFG_CLK];
+
 
 static void __iomem *gbRegBase;
 struct platform_device *mtkBackupPVRLDMDev = NULL;
@@ -49,59 +54,43 @@ static bool bMfgInit;
 #define DRV_Reg32(ptr) \
 	(readl(ptr))
 
+#define REG_MFG_AXI (1 << 0)
+#define	REG_MFG_MEM (1 << 1)
+#define	REG_MFG_G3D (1 << 2)
+#define	REG_MFG_26M (1 << 3)
+#define	REG_MFG_ALL (REG_MFG_AXI | REG_MFG_MEM | REG_MFG_G3D | REG_MFG_26M)
+
+#define REG_MFG_CG_STA 0x00
+#define REG_MFG_CG_SET 0x04
+#define REG_MFG_CG_CLR 0x08
+
 static int MtkEnableMfgClock(void)
 {
-	mtk_mfg_debug("MtkEnableMfgClock[%d] Begin... clks %p %p %p %p\n",
-		      bGetClock, g_mfgclk_axi, g_mfgclk_mem,
-		      g_mfgclk_g3d, g_mfgclk_26m);
+	int i;
+
+	mtk_mfg_debug("MtkEnableMfgClock Begin\n");
 
 	pm_runtime_get_sync(&mtkBackupPVRLDMDev->dev);
+	for (i = 0; i < MAX_TOP_MFG_CLK; i++)
+		clk_prepare_enable(g_top_clk[i]);
+	DRV_WriteReg32(gbRegBase + REG_MFG_CG_CLR, REG_MFG_ALL);
 
-	clk_prepare(g_mfgclk_mem_in_sel);
-	clk_enable(g_mfgclk_mem_in_sel);
-
-	clk_prepare(g_mfgclk_axi_in_sel);
-	clk_enable(g_mfgclk_axi_in_sel);
-
-	clk_prepare(g_mfgclk_axi);
-	clk_enable(g_mfgclk_axi);
-
-	clk_prepare(g_mfgclk_mem);
-	clk_enable(g_mfgclk_mem);
-
-	clk_prepare(g_mfgclk_g3d);
-	clk_enable(g_mfgclk_g3d);
-
-	clk_prepare(g_mfgclk_26m);
-	clk_enable(g_mfgclk_26m);
-
-	mtk_mfg_debug("MtkEnableMfgClock  end...\n");
+	mtk_mfg_debug("MtkEnableMfgClock  end\n");
 	return PVRSRV_OK;
 }
 
 static int MtkDisableMfgClock(void)
 {
-	mtk_mfg_debug("MtkDisableMfgClock[%d]\n", bGetClock);
-	return PVRSRV_OK;
-	clk_disable(g_mfgclk_26m);
-	clk_unprepare(g_mfgclk_26m);
+	int i;
 
-	clk_disable(g_mfgclk_g3d);
-	clk_unprepare(g_mfgclk_g3d);
+	mtk_mfg_debug("MtkDisableMfgClock Begin\n");
 
-	clk_disable(g_mfgclk_mem);
-	clk_unprepare(g_mfgclk_mem);
-
-	clk_disable(g_mfgclk_axi);
-	clk_unprepare(g_mfgclk_axi);
-
-	clk_disable(g_mfgclk_axi_in_sel);
-	clk_unprepare(g_mfgclk_axi_in_sel);
-
-	clk_disable(g_mfgclk_mem_in_sel);
-	clk_unprepare(g_mfgclk_mem_in_sel);
-
+	DRV_WriteReg32(gbRegBase + REG_MFG_CG_SET, REG_MFG_ALL);
+	for (i = MAX_TOP_MFG_CLK - 1; i >= 0; i--)
+		clk_disable_unprepare(g_top_clk[i]);
 	pm_runtime_put_sync(&mtkBackupPVRLDMDev->dev);
+
+	mtk_mfg_debug("MtkDisableMfgClock end\n");
 	return PVRSRV_OK;
 }
 
@@ -163,7 +152,7 @@ static DEFINE_MUTEX(g_DevPostMutex);
 
 int MTKMFGGetClocks(struct platform_device *pdev)
 {
-	int volt, enable, err;
+	int i, enable, err;
 
 	gbRegBase = of_iomap(pdev->dev.of_node, 1);
 	if (!gbRegBase) {
@@ -171,71 +160,32 @@ int MTKMFGGetClocks(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	g_mfgclk_mem_in_sel = devm_clk_get(&pdev->dev, "mfg_mem_in_sel");
-	if (IS_ERR(g_mfgclk_mem_in_sel)) {
-		err = PTR_ERR(g_mfgclk_mem_in_sel);
-		goto err_iounmap_reg_base;
-	}
-
-	g_mfgclk_axi_in_sel = devm_clk_get(&pdev->dev, "mfg_axi_in_sel");
-	if (IS_ERR(g_mfgclk_axi_in_sel)) {
-		err = PTR_ERR(g_mfgclk_axi_in_sel);
-		goto err_clk_put_mem_in_sel;
-	}
-
-	g_mfgclk_axi = devm_clk_get(&pdev->dev, "mfg_axi");
-	if (IS_ERR(g_mfgclk_axi)) {
-		err = PTR_ERR(g_mfgclk_axi);
-		goto err_clk_put_axi_in_sel;
-	}
-
-	g_mfgclk_mem = devm_clk_get(&pdev->dev, "mfg_mem");
-	if (IS_ERR(g_mfgclk_mem)) {
-		err = PTR_ERR(g_mfgclk_mem);
-		goto err_clk_put_mfgclk_axi;
-	}
-
-	g_mfgclk_g3d = devm_clk_get(&pdev->dev, "mfg_g3d");
-	if (IS_ERR(g_mfgclk_g3d)) {
-		err = PTR_ERR(g_mfgclk_g3d);
-		goto err_clk_put_mfgclk_mem;
-	}
-
-	g_mfgclk_26m = devm_clk_get(&pdev->dev, "mfg_26m");
-	if (IS_ERR(g_mfgclk_26m)) {
-		err = PTR_ERR(g_mfgclk_26m);
-		goto err_clk_put_mfgclk_g3d;
-	}
-
 	g_mmpll = devm_clk_get(&pdev->dev, "mmpll_clk");
 	if (IS_ERR(g_mmpll)) {
 		err = PTR_ERR(g_mmpll);
-		goto err_clk_put_mfgclk_26m;
+		goto err_iounmap_reg_base;
+	}
+
+	for (i = 0; i < MAX_TOP_MFG_CLK; i++) {
+		g_top_clk[i] = devm_clk_get(&pdev->dev, top_mfg_clk_name[i]);
+		if (IS_ERR(g_top_clk[i])) {
+			err = PTR_ERR(g_top_clk[i]);
+			g_top_clk[i] = NULL;
+			goto err_iounmap_reg_base;
+		}
 	}
 
 	g_vgpu = devm_regulator_get(&pdev->dev, "mfgsys-power");
 	if (IS_ERR(g_vgpu)) {
 		err = PTR_ERR(g_vgpu);
-		goto err_clk_put_mmpll;
+		goto err_iounmap_reg_base;
 	}
 
 	mtkBackupPVRLDMDev = pdev;
 
-	mtk_mfg_debug("MTKMFGGetClocks[%d] clocks %p %p %p %p\n",
-		      bGetClock, g_mfgclk_axi, g_mfgclk_mem,
-		      g_mfgclk_g3d, g_mfgclk_26m);
-	volt = regulator_get_voltage(g_vgpu);
-	enable = regulator_is_enabled(g_vgpu);
-
-	mtk_mfg_debug("g_vgpu = %p, volt = %d, enable = %d\n",
-		      g_vgpu, volt, enable);
-
-	if (enable == 0) {
-		enable = regulator_enable(g_vgpu);
-		if (enable != 0)
-			mtk_mfg_debug("failed to enable regulator %d\n",
-				      regulator_is_enabled(g_vgpu));
-	}
+	enable = regulator_enable(g_vgpu);
+	if (enable != 0)
+		mtk_mfg_debug("failed to enable regulator vgpu\n");
 
 	pm_runtime_enable(&pdev->dev);
 
@@ -244,20 +194,6 @@ int MTKMFGGetClocks(struct platform_device *pdev)
 
 	return 0;
 
-err_clk_put_mmpll:
-	devm_clk_put(&pdev->dev, g_mmpll);
-err_clk_put_mfgclk_26m:
-	devm_clk_put(&pdev->dev, g_mfgclk_26m);
-err_clk_put_mfgclk_g3d:
-	devm_clk_put(&pdev->dev, g_mfgclk_g3d);
-err_clk_put_mfgclk_mem:
-	devm_clk_put(&pdev->dev, g_mfgclk_mem);
-err_clk_put_mfgclk_axi:
-	devm_clk_put(&pdev->dev, g_mfgclk_axi);
-err_clk_put_axi_in_sel:
-	devm_clk_put(&pdev->dev, g_mfgclk_axi_in_sel);
-err_clk_put_mem_in_sel:
-	devm_clk_put(&pdev->dev, g_mfgclk_mem_in_sel);
 err_iounmap_reg_base:
 	iounmap(gbRegBase);
 	return err;
