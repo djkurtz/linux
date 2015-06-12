@@ -11,11 +11,14 @@
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
 */
-#include "servicesext.h"
-#include "rgxdevice.h"
 
 #ifndef MT8173_MFGSYS_H
 #define MT8173_MFGSYS_H
+
+#include "servicesext.h"
+#include "rgxdevice.h"
+
+#include <linux/platform_device.h>
 
 /* control APM is enabled or not  */
 #define MTK_PM_SUPPORT 1
@@ -38,7 +41,7 @@
 #if ENABLE_MTK_MFG_DEBUG
 #define mtk_mfg_debug(fmt, args...) pr_info("[MFG]" fmt, ##args)
 #else
-#define mtk_mfg_debug(fmt, args...)
+#define mtk_mfg_debug(fmt, args...) do { } while (0)
 #endif
 
 extern struct regulator *g_vgpu;
@@ -47,6 +50,7 @@ extern struct clk *g_mmpll;
 /* extern to be used by PVRCore_Init in RGX DDK module.c  */
 extern int MTKMFGSystemInit(void);
 extern int MTKMFGSystemDeInit(void);
+extern int MTKMFGGetClocks(struct platform_device *pdev);
 
 extern void MTKSysSetInitialPowerState(void);
 extern void MTKSysRestoreInitialPowerState(void);

@@ -20,23 +20,32 @@
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
 #include <linux/regulator/consumer.h>
+#include <linux/version.h>
 #include <linux/pm_runtime.h>
-
-#include "pvrsrv_error.h"
 
 #include "mt8173_mfgsys.h"
 #include "mt8173_mfgdvfs.h"
 
+#ifndef MTK_MFG_DVFS
 struct regulator *g_vgpu;
 struct clk *g_mmpll;
+#endif
 
 
 static char *top_mfg_clk_name[] ={
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 11, 0))
 	"mfg_mem_in_sel",
 	"mfg_axi_in_sel",
 	"top_axi",
 	"top_mem",
 	"top_mfg",
+#else
+	"MT_CG_MFG_POWER",
+	"MT_CG_MFG_AXI",
+	"MT_CG_MFG_MEM",
+	"MT_CG_MFG_G3D",
+	"MT_CG_MFG_26M",
+#endif
 };
 #define MAX_TOP_MFG_CLK ARRAY_SIZE(top_mfg_clk_name)
 static struct clk *g_top_clk[MAX_TOP_MFG_CLK];
@@ -152,7 +161,7 @@ static DEFINE_MUTEX(g_DevPostMutex);
 
 int MTKMFGGetClocks(struct platform_device *pdev)
 {
-	int i, enable, err;
+	int i, err;
 
 	gbRegBase = of_iomap(pdev->dev.of_node, 1);
 	if (!gbRegBase) {
@@ -160,32 +169,41 @@ int MTKMFGGetClocks(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
+#ifndef MTK_MFG_DVFS
 	g_mmpll = devm_clk_get(&pdev->dev, "mmpll_clk");
 	if (IS_ERR(g_mmpll)) {
+		mtk_mfg_debug("Failed to look up clock 'mmpll_clk'\n");
 		err = PTR_ERR(g_mmpll);
 		goto err_iounmap_reg_base;
 	}
+#endif
 
 	for (i = 0; i < MAX_TOP_MFG_CLK; i++) {
 		g_top_clk[i] = devm_clk_get(&pdev->dev, top_mfg_clk_name[i]);
 		if (IS_ERR(g_top_clk[i])) {
+			mtk_mfg_debug("Failed to look up clock '%s'\n", top_mfg_clk_name[i]);
 			err = PTR_ERR(g_top_clk[i]);
 			g_top_clk[i] = NULL;
 			goto err_iounmap_reg_base;
 		}
 	}
 
+	mtkBackupPVRLDMDev = pdev;
+
+#ifndef MTK_MFG_DVFS
 	g_vgpu = devm_regulator_get(&pdev->dev, "mfgsys-power");
 	if (IS_ERR(g_vgpu)) {
+		mtk_mfg_debug("Failed to look up regulator 'mfgsys-power'\n");
 		err = PTR_ERR(g_vgpu);
 		goto err_iounmap_reg_base;
 	}
 
-	mtkBackupPVRLDMDev = pdev;
-
-	enable = regulator_enable(g_vgpu);
-	if (enable != 0)
-		mtk_mfg_debug("failed to enable regulator vgpu\n");
+	{
+		int enable = regulator_enable(g_vgpu);
+		if (enable != 0)
+			mtk_mfg_debug("failed to enable regulator vgpu\n");
+	}
+#endif
 
 	pm_runtime_enable(&pdev->dev);
 

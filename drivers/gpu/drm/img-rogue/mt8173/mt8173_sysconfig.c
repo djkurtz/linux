@@ -119,12 +119,6 @@ void UMAPhysHeapDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
 	}
 }
 
-static int g32SysIrq = -1;
-int MTKSysGetIRQ(void)
-{
-	return g32SysIrq;
-}
-
 /*
 	SysCreateConfigData
 */
@@ -194,7 +188,6 @@ add for new DDK 1.1.2550513
 			gsDevices[0].ui32IRQ				= irq_res->start;
 			gsDevices[0].bIRQIsShared			= IMG_FALSE;
 			gsDevices[0].eIRQActiveLevel        = PVRSRV_DEVICE_IRQ_ACTIVE_LOW;
-			g32SysIrq = irq_res->start;
 
 			PVR_DPF((PVR_DBG_ERROR, "irq_res = 0x%x", (int)irq_res->start));
 		}
@@ -227,6 +220,11 @@ add for new DDK 1.1.2550513
 	gsDevices[0].bIRQIsShared           = IMG_FALSE;
 	gsDevices[0].eIRQActiveLevel        = PVRSRV_DEVICE_IRQ_ACTIVE_LOW;
 #endif
+
+	/* Device's physical heap IDs */
+	gsDevices[0].aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL] = 0;
+	gsDevices[0].aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL] = 0;
+
 	/*  power management on  HW system */
 	#if MTK_PM_SUPPORT
 	gsDevices[0].pfnPrePowerState       =MTKSysDevPrePowerState;
@@ -282,7 +280,7 @@ add for new DDK 1.1.2550513
 
 	/* Setup other system specific stuff */
 #if defined(SUPPORT_ION)
-	IonInit();
+	IonInit(NULL);
 #endif
 
 	*ppsSysConfig = &gsSysConfig;
