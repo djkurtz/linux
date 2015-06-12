@@ -51,10 +51,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem_typedefs.h"
 
 
-/* Bridge module IN and OUT structure sizes as specified in optional MODULE_IOCTL */
-#define PVRSRV_BRIDGE_HTBUFFER_IN__SIZE	 76
-#define PVRSRV_BRIDGE_HTBUFFER_OUT_SIZE	 4
-
 #define PVRSRV_BRIDGE_HTBUFFER_CMD_FIRST			0
 #define PVRSRV_BRIDGE_HTBUFFER_HTBCONFIGURE			PVRSRV_BRIDGE_HTBUFFER_CMD_FIRST+0
 #define PVRSRV_BRIDGE_HTBUFFER_HTBCONTROL			PVRSRV_BRIDGE_HTBUFFER_CMD_FIRST+1
@@ -74,15 +70,11 @@ typedef struct PVRSRV_BRIDGE_IN_HTBCONFIGURE_TAG
 	IMG_UINT32 ui32BufferSize;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_HTBCONFIGURE;
 
-static_assert((sizeof( PVRSRV_BRIDGE_IN_HTBCONFIGURE)<=PVRSRV_BRIDGE_HTBUFFER_IN__SIZE), "PVRSRV_BRIDGE_HTBUFFER_IN__SIZE is too small");
-
 /* Bridge out structure for HTBConfigure */
 typedef struct PVRSRV_BRIDGE_OUT_HTBCONFIGURE_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_HTBCONFIGURE;
-
-static_assert((sizeof( PVRSRV_BRIDGE_OUT_HTBCONFIGURE)<=PVRSRV_BRIDGE_HTBUFFER_OUT_SIZE), "PVRSRV_BRIDGE_HTBUFFER_OUT_SIZE is too small");
 
 
 /*******************************************
@@ -100,15 +92,11 @@ typedef struct PVRSRV_BRIDGE_IN_HTBCONTROL_TAG
 	IMG_UINT32 ui32OpMode;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_HTBCONTROL;
 
-static_assert((sizeof( PVRSRV_BRIDGE_IN_HTBCONTROL)<=PVRSRV_BRIDGE_HTBUFFER_IN__SIZE), "PVRSRV_BRIDGE_HTBUFFER_IN__SIZE is too small");
-
 /* Bridge out structure for HTBControl */
 typedef struct PVRSRV_BRIDGE_OUT_HTBCONTROL_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_HTBCONTROL;
-
-static_assert((sizeof( PVRSRV_BRIDGE_OUT_HTBCONTROL)<=PVRSRV_BRIDGE_HTBUFFER_OUT_SIZE), "PVRSRV_BRIDGE_HTBUFFER_OUT_SIZE is too small");
 
 
 /*******************************************
@@ -125,15 +113,11 @@ typedef struct PVRSRV_BRIDGE_IN_HTBLOG_TAG
 	IMG_UINT32 * pui32Args;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_HTBLOG;
 
-static_assert((sizeof( PVRSRV_BRIDGE_IN_HTBLOG)<=PVRSRV_BRIDGE_HTBUFFER_IN__SIZE), "PVRSRV_BRIDGE_HTBUFFER_IN__SIZE is too small");
-
 /* Bridge out structure for HTBLog */
 typedef struct PVRSRV_BRIDGE_OUT_HTBLOG_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_HTBLOG;
-
-static_assert((sizeof( PVRSRV_BRIDGE_OUT_HTBLOG)<=PVRSRV_BRIDGE_HTBUFFER_OUT_SIZE), "PVRSRV_BRIDGE_HTBUFFER_OUT_SIZE is too small");
 
 
 #endif /* COMMON_HTBUFFER_BRIDGE_H */

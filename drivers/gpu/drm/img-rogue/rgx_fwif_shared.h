@@ -54,10 +54,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  ******************************************************************************
  * Device state flags
  *****************************************************************************/
-#define RGXKMIF_DEVICE_STATE_ZERO_FREELIST			(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed free lists */
-#define RGXKMIF_DEVICE_STATE_FTRACE_EN				(0x1 << 1)		/*!< Used to enable device FTrace thread to consume HWPerf data */
-#define RGXKMIF_DEVICE_STATE_DISABLE_DW_LOGGING_EN	(0x1 << 2)		/*!< Used to disable the Devices Watchdog logging */
-#define RGXKMIF_DEVICE_STATE_DUST_REQUEST_INJECT_EN		(0x1 << 3)		/*!< Used for validation to inject dust requests every TA/3D kick */
+#define RGXKMIF_DEVICE_STATE_ZERO_FREELIST          (0x1 << 0)		/*!< Zeroing the physical pages of reconstructed free lists */
+#define RGXKMIF_DEVICE_STATE_FTRACE_EN              (0x1 << 1)		/*!< Used to enable production of GPT FTrace from HWPerf events in the MISR */
+#define RGXKMIF_DEVICE_STATE_DISABLE_DW_LOGGING_EN  (0x1 << 2)		/*!< Used to disable the Devices Watchdog logging */
+#define RGXKMIF_DEVICE_STATE_DUST_REQUEST_INJECT_EN (0x1 << 3)		/*!< Used for validation to inject dust requests every TA/3D kick */
+#define RGXKMIF_DEVICE_STATE_HWPERF_HOST_EN         (0x1 << 4)		/*!< Used to enable host-side-only HWPerf stream */
 
 /* Required memory alignment for 64-bit variables accessible by Meta 
   (the gcc meta aligns 64-bit vars to 64-bit; therefore, mem shared between
@@ -94,7 +95,6 @@ typedef RGXFWIF_DEV_VIRTADDR  PRGXFWIF_UFO_ADDR;
 typedef RGXFWIF_DEV_VIRTADDR  PRGXFWIF_CLEANUP_CTL;
 typedef RGXFWIF_DEV_VIRTADDR  PRGXFWIF_TIMESTAMP_ADDR;
 
-/* FIXME PRGXFWIF_UFO_ADDR and RGXFWIF_UFO should move back into rgx_fwif_client.h */
 typedef struct _RGXFWIF_UFO_
 {
 	PRGXFWIF_UFO_ADDR	puiAddrUFO;
@@ -214,7 +214,7 @@ typedef struct _RGXFWIF_RPM_FREELIST_
 	IMG_UINT32			ui32WriteOffset;		/*!< tail: where to write de-alloc'd pages */
 	IMG_BOOL			bReadToggle;			/*!< toggle bit for circular buffer */
 	IMG_BOOL			bWriteToggle;
-	IMG_UINT32			ui32AllocatedPageCount; /*!< TODO: not sure yet if this is useful */
+	IMG_UINT32			ui32AllocatedPageCount;
 	IMG_UINT32			ui32HWRCounter;
 	IMG_UINT32			ui32FreeListID;			/*!< unique ID per device, e.g. rolling counter */
 	IMG_BOOL			bGrowPending;			/*!< FW is waiting for host to grow the freelist */
@@ -224,7 +224,6 @@ typedef struct _RGXFWIF_RAY_FRAME_DATA_
 {
 	/* state manager for shared state between vertex and ray processing */
 	
-	/* TODO: not sure if this will be useful, link it here for now */
 	IMG_UINT32		sRPMFreeLists[RGXFW_MAX_RPM_FREELISTS];
 	
 	IMG_BOOL		bAbortOccurred;
@@ -379,15 +378,50 @@ typedef struct _RGXFWIF_COMPCHECKS_
 
 
 /* Defines relating to the per-context CCBs */
-#define RGX_CCB_SIZE_LOG2			(16) /* 64kB */
-#define RGX_CCB_ALLOCGRAN			(64)
-#define RGX_CCB_TYPE_TASK			(1 << 31)
-#define RGX_CCB_FWALLOC_ALIGN(size)	(((size) + (RGXFWIF_FWALLOC_ALIGN-1)) & ~(RGXFWIF_FWALLOC_ALIGN - 1))
+
+/* This size is to be used when a client CCB is found to consume very negligible space
+ * (e.g. a few hundred bytes to few KBs - less than a page). In such a case, instead of
+ * allocating CCB of size of only a few KBs, we allocate at-least this much to be future
+ * risk-free. */
+#define MIN_SAFE_CCB_SIZE_LOG2	13	/* 8K (2 Pages) */
+
+/* cCCB sizes per DM context */
+#if defined(EMULATOR)
+
+/* On emulator platform, the sizes are kept as 64 KB for all contexts as the cCCBs
+ * are expected to be almost always used upto their full sizes */
+
+#define RGX_TQ3D_CCB_SIZE_LOG2	16	/* 64K */
+#define RGX_TQ2D_CCB_SIZE_LOG2	16
+#define RGX_CDM_CCB_SIZE_LOG2	16
+#define RGX_TA_CCB_SIZE_LOG2	16
+#define RGX_3D_CCB_SIZE_LOG2	16
+#define RGX_KICKSYNC_CCB_SIZE_LOG2	16
+#define RGX_RTU_CCB_SIZE_LOG2	16
+
+#else /* defined (EMULATOR) */
+
+/* The following figures are obtained by observing the cCCB usage levels of various
+ * GL/CL benchmark applications under different platforms and configurations, such
+ * that the high watermarks (almost) never hit the full size of the cCCB */
+#define RGX_TQ3D_CCB_SIZE_LOG2	14	/* 16K */
+#define RGX_TQ2D_CCB_SIZE_LOG2	14	/* 16K */
+#define RGX_CDM_CCB_SIZE_LOG2	MIN_SAFE_CCB_SIZE_LOG2	/* The compute cCCB was found to consume only a few hundred bytes on a compute benchmark */
+#define RGX_TA_CCB_SIZE_LOG2	15	/* 32K */
+#define RGX_3D_CCB_SIZE_LOG2	16	/* 64K */
+#define RGX_KICKSYNC_CCB_SIZE_LOG2	MIN_SAFE_CCB_SIZE_LOG2 /* KickSync expected to consume low, hence minimum size */
+#define RGX_RTU_CCB_SIZE_LOG2	15
+
+#endif /* defined (EMULATOR) */
 
 /*!
  ******************************************************************************
  * Client CCB commands for RGX
  *****************************************************************************/
+
+#define RGX_CCB_TYPE_TASK			(1 << 31)
+#define RGX_CCB_FWALLOC_ALIGN(size)	(((size) + (RGXFWIF_FWALLOC_ALIGN-1)) & ~(RGXFWIF_FWALLOC_ALIGN - 1))
+
 typedef enum _RGXFWIF_CCB_CMD_TYPE_
 {
 	RGXFWIF_CCB_CMD_TYPE_TA			= 201 | RGX_CCB_TYPE_TASK,
@@ -423,6 +457,8 @@ typedef struct _RGXFWIF_CCB_CMD_HEADER_
 {
 	RGXFWIF_CCB_CMD_TYPE	eCmdType;
 	IMG_UINT32				ui32CmdSize;
+	IMG_UINT32				ui32ExtJobRef; /*!< external job reference - provided by client and used in debug for tracking submitted work */
+	IMG_UINT32				ui32IntJobRef; /*!< internal job reference - generated by services and used in debug for tracking submitted work */
 } RGXFWIF_CCB_CMD_HEADER;
 
 typedef enum _RGXFWIF_REG_CFG_TYPE_
@@ -475,7 +511,7 @@ typedef struct _RGXFWIF_TIME_CORR_
  * This is the same as keeping K as a decimal number.
  *
  * The maximum deltaOS is slightly more than 5hrs for all GPU frequencies
- * (deltaCR * K is more or less a costant), and it's relative to
+ * (deltaCR * K is more or less a constant), and it's relative to
  * the base OS timestamp sampled as a part of the timer correlation data.
  * This base is refreshed on GPU power-on, DVFS transition and
  * periodic frequency calibration (executed every few seconds if the FW is

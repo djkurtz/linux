@@ -55,7 +55,7 @@ extern "C" {
 #include "pvrsrv_error.h"
 #include "htbuffer_sf.h"
 #include "htbuffer_types.h"
-
+#include "htbuffer_init.h"
 
 #if defined(__KERNEL__)
 #define HTBLOGK(SF, args...) do { if (HTB_GROUP_ENABLED(SF)) HTBLogSimple(0, SF, ## args); } while (0)
@@ -63,63 +63,13 @@ extern "C" {
 #define HTBLOG(handle, SF, args...) do { if (HTB_GROUP_ENABLED(SF)) HTBLogSimple(handle, SF, ## args); } while (0)
 #endif
 
+/* macros to cast 64 or 32-bit pointers into 32-bit integer components for Host Trace */
+#define HTBLOG_PTR_BITS_HIGH(p) ((IMG_UINT32)((((IMG_UINT64)((uintptr_t)p))>>32)&0xffffffff))
+#define HTBLOG_PTR_BITS_LOW(p)  ((IMG_UINT32)(((IMG_UINT64)((uintptr_t)p))&0xffffffff))
 
-/*************************************************************************/ /*!
- @Function      HTBConfigure
- @Description   Configure the Host Trace Buffer.
-                Once these parameters are set they may not be changed
-
- @Input         hSrvHandle      Server Handle
-
- @Input         pszBufferName   Name to use for the TL buffer, this will be
-                                required to request trace data from the TL
-
- @Input         ui32BufferSize  Requested TL buffer size in bytes
-
- @Return        eError          Internal services call returned eError error
-                                number
-*/ /**************************************************************************/
-IMG_INTERNAL PVRSRV_ERROR
-HTBConfigure(
-	IMG_HANDLE hSrvHandle,
-	IMG_CHAR * pszBufferName,
-	IMG_UINT32 ui32BufferSize
-);
-
-
-/*************************************************************************/ /*!
- @Function      HTBControl
- @Description   Update the configuration of the Host Trace Buffer
-
- @Input         hSrvHandle      Server Handle
-
- @Input         ui32NumFlagGroups Number of group enable flags words
-
- @Input         aui32GroupEnable  Flags words controlling groups to be logged
-
- @Input         ui32LogLevel    Log level to record
-
- @Input         ui32EnablePID   PID to enable logging for a specific process
-
- @Input         eLogMode        Enable logging for all or specific processes,
-
- @Input         eOpMode         Control what trace data is dropped if the TL
-                                buffer is full
-
- @Return        eError          Internal services call returned eError error
-                                number
-*/ /**************************************************************************/
-IMG_INTERNAL PVRSRV_ERROR
-HTBControl(
-	IMG_HANDLE hSrvHandle,
-	IMG_UINT32 ui32NumFlagGroups,
-	IMG_UINT32 * aui32GroupEnable,
-	IMG_UINT32 ui32LogLevel,
-	IMG_UINT32 ui32EnablePID,
-	HTB_LOGMODE_CTRL eLogMode,
-	HTB_OPMODE_CTRL eOpMode
-);
-
+/* macros to cast 64-bit integers into 32-bit integer components for Host Trace */
+#define HTBLOG_U64_BITS_HIGH(u) ((IMG_UINT32)((u>>32)&0xffffffff))
+#define HTBLOG_U64_BITS_LOW(u)  ((IMG_UINT32)(u&0xffffffff))
 
 /*************************************************************************/ /*!
  @Function      HTBLog

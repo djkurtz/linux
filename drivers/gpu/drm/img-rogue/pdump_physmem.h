@@ -53,7 +53,7 @@ typedef struct _PDUMP_PHYSMEM_INFO_T_ PDUMP_PHYSMEM_INFO_T;
 
 #if defined(PDUMP)
 extern PVRSRV_ERROR
-PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
+PDumpMalloc(const IMG_CHAR *pszDevSpace,
                const IMG_CHAR *pszSymbolicAddress,
                IMG_UINT64 ui64Size,
                /* alignment is alignment of start of buffer _and_
@@ -71,14 +71,14 @@ PDumpPMRMallocPMR(const PMR *psPMR,
                   IMG_HANDLE *phPDumpAllocInfoPtr);
 
 extern
-PVRSRV_ERROR PDumpPMRFree(IMG_HANDLE hPDumpAllocationInfoHandle);
+PVRSRV_ERROR PDumpFree(IMG_HANDLE hPDumpAllocationInfoHandle);
 #else	/* PDUMP */
 
 #ifdef INLINE_IS_PRAGMA
 #pragma inline(PVRSRVSyncPrimPDumpPolKM)
 #endif
 static INLINE PVRSRV_ERROR
-PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
+PDumpMalloc(const IMG_CHAR *pszDevSpace,
                const IMG_CHAR *pszSymbolicAddress,
                IMG_UINT64 ui64Size,
                IMG_DEVMEM_ALIGN_T uiAlign,
@@ -113,7 +113,7 @@ PDumpPMRMallocPMR(const PMR *psPMR,
 #pragma inline(PVRSRVSyncPrimPDumpPolKM)
 #endif
 static INLINE PVRSRV_ERROR
-PDumpPMRFree(IMG_HANDLE hPDumpAllocationInfoHandle)
+PDumpFree(IMG_HANDLE hPDumpAllocationInfoHandle)
 {
 	PVR_UNREFERENCED_PARAMETER(hPDumpAllocationInfoHandle);
 	return PVRSRV_OK;
@@ -125,9 +125,9 @@ PDumpPMRFree(IMG_HANDLE hPDumpAllocationInfoHandle)
 
 #if defined(PDUMP)
 #define PDUMP_PHYSMEM_MALLOC_OSPAGES(pszPDumpMemDevName, ui32SerialNum, ui32Size, ui32Align, phHandlePtr) \
-    PDumpPMRMalloc(pszPDumpMemDevName, PMR_OSALLOCPAGES_PREFIX, ui32SerialNum, ui32Size, ui32Align, phHandlePtr)
+    PDumpMalloc(pszPDumpMemDevName, PMR_OSALLOCPAGES_PREFIX, ui32SerialNum, ui32Size, ui32Align, phHandlePtr)
 #define PDUMP_PHYSMEM_FREE_OSPAGES(hHandle) \
-    PDumpPMRFree(hHandle)
+    PDumpFree(hHandle)
 #else
 #define PDUMP_PHYSMEM_MALLOC_OSPAGES(pszPDumpMemDevName, ui32SerialNum, ui32Size, ui32Align, phHandlePtr) \
     ((void)(*phHandlePtr=NULL))

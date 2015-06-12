@@ -54,8 +54,4 @@ ServerSyncRef(SERVER_SYNC_PRIMITIVE *psSync);
 void
 ServerSyncUnref(SERVER_SYNC_PRIMITIVE *psSync);
 
-IMG_BOOL
-ServerSyncFenceWasMet(SERVER_SYNC_PRIMITIVE *psSync,
-				 IMG_UINT32 ui32FenceValue);
-
 #endif	/*_SYNC_SERVER_INTERNAL_H_ */

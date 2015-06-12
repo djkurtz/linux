@@ -263,6 +263,7 @@ PVRSRVBridgeRGXOverallocateBPRegisters(IMG_UINT32 ui32DispatchTableEntry,
  * Server bridge dispatch related glue 
  */
 
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitBREAKPOINTBridge(void);
 PVRSRV_ERROR DeinitBREAKPOINTBridge(void);
@@ -274,24 +275,19 @@ PVRSRV_ERROR InitBREAKPOINTBridge(void)
 {
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_BREAKPOINT, PVRSRV_BRIDGE_BREAKPOINT_RGXSETBREAKPOINT, PVRSRVBridgeRGXSetBreakpoint,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_BREAKPOINT, PVRSRV_BRIDGE_BREAKPOINT_RGXCLEARBREAKPOINT, PVRSRVBridgeRGXClearBreakpoint,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_BREAKPOINT, PVRSRV_BRIDGE_BREAKPOINT_RGXENABLEBREAKPOINT, PVRSRVBridgeRGXEnableBreakpoint,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_BREAKPOINT, PVRSRV_BRIDGE_BREAKPOINT_RGXDISABLEBREAKPOINT, PVRSRVBridgeRGXDisableBreakpoint,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_BREAKPOINT, PVRSRV_BRIDGE_BREAKPOINT_RGXOVERALLOCATEBPREGISTERS, PVRSRVBridgeRGXOverallocateBPRegisters,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;

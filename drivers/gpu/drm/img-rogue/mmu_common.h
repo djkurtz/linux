@@ -128,15 +128,15 @@ typedef struct _MMU_DEVICEATTRIBS_
 	const struct _MMU_DEVVADDR_CONFIG_ *psTopLevelDevVAddrConfig;
 
 	/*! Callback for creating protection bits for the page catalogue entry with 8 byte entry */
-	IMG_UINT64 (*pfnDerivePCEProt8)(IMG_UINT32, IMG_UINT8);
+	IMG_UINT64 (*pfnDerivePCEProt8)(IMG_UINT32, IMG_UINT32);
 	/*! Callback for creating protection bits for the page catalogue entry with 4 byte entry */
 	IMG_UINT32 (*pfnDerivePCEProt4)(IMG_UINT32);
 	/*! Callback for creating protection bits for the page directory entry with 8 byte entry */
-	IMG_UINT64 (*pfnDerivePDEProt8)(IMG_UINT32, IMG_UINT8);
+	IMG_UINT64 (*pfnDerivePDEProt8)(IMG_UINT32, IMG_UINT32);
 	/*! Callback for creating protection bits for the page directory entry with 4 byte entry */
 	IMG_UINT32 (*pfnDerivePDEProt4)(IMG_UINT32);
 	/*! Callback for creating protection bits for the page table entry with 8 byte entry */
-	IMG_UINT64 (*pfnDerivePTEProt8)(IMG_UINT32, IMG_UINT8);
+	IMG_UINT64 (*pfnDerivePTEProt8)(IMG_UINT32, IMG_UINT32);
 	/*! Callback for creating protection bits for the page table entry with 4 byte entry */
 	IMG_UINT32 (*pfnDerivePTEProt4)(IMG_UINT32);
 
@@ -200,34 +200,24 @@ typedef struct _MMU_DEVVADDR_CONFIG_
 	where v is the variable page table modifier and is optional
 */
 /*!
-	Generic MMU page * entry description. This is used to describe PC, PD and PT
+	Generic MMU entry description. This is used to describe PC, PD and PT entries.
 */
 typedef struct _MMU_PxE_CONFIG_
 {
-	/*! Size of an entry in bytes */
-	IMG_UINT8	uiBytesPerEntry;
+	IMG_UINT8	uiBytesPerEntry;  /*! Size of an entry in bytes */
 
-	/*! Physical address mask */
-	IMG_UINT64	 uiAddrMask;
-	/*! Physical address shift */
-	IMG_UINT8	 uiAddrShift;
-	/*! Log 2 alignment */
-	IMG_UINT8	 uiLog2Align;
+	IMG_UINT64	 uiAddrMask;      /*! Physical address mask */
+	IMG_UINT8	 uiAddrShift;     /*! Physical address shift */
+	IMG_UINT8	 uiAddrLog2Align; /*! Physical address Log 2 alignment */
 
-	/*! Variable control mask */
-	IMG_UINT64	 uiVarCtrlMask;
-	/*! Variable control shift */
-	IMG_UINT8	 uiVarCtrlShift;
+	IMG_UINT64	 uiVarCtrlMask;	  /*! Variable control mask */
+	IMG_UINT8	 uiVarCtrlShift;  /*! Variable control shift */
 
-	/*! Protection flags mask */
-	IMG_UINT64	 uiProtMask;
-	/*! Protection flags shift */
-	IMG_UINT8	 uiProtShift;
+	IMG_UINT64	 uiProtMask;      /*! Protection flags mask */
+	IMG_UINT8	 uiProtShift;     /*! Protection flags shift */
 
-	/*! Entry valid bit mask */
-	IMG_UINT64   uiValidEnMask;
-	/*! Entry valid bit shift */
-	IMG_UINT8    uiValidEnShift;
+	IMG_UINT64   uiValidEnMask;   /*! Entry valid bit mask */
+	IMG_UINT8    uiValidEnShift;  /*! Entry valid bit shift */
 } MMU_PxE_CONFIG;
 
 /* MMU Protection flags */
@@ -352,15 +342,46 @@ extern void
 MMU_Free (MMU_CONTEXT *psMMUContext,
           IMG_DEV_VIRTADDR sDevVAddr,
           IMG_DEVMEM_SIZE_T uiSize,
-          IMG_UINT8 uiLog2PageSize);
+          IMG_UINT32 uiLog2DataPageSize);
 
+
+/*************************************************************************/ /*!
+@Function       MMU_MapPages
+
+@Description    Map pages to the MMU.
+                Two modes of operation: One requires a list of physical page
+                indices that are going to be mapped, the other just takes
+                the PMR and a possible offset to map parts of it.
+
+@Input          psMMUContext            MMU context to operate on
+
+@Input          uiMappingFlags          Memalloc flags for the mapping
+
+@Input          sDevVAddrBase           Device virtual address of the 1st page
+
+@Input          psPMR                   PMR to map
+
+@Input          ui32PhysPgOffset        Physical offset into the PMR
+
+@Input          ui32MapPageCount        Number of pages to map
+
+@Input          paui32MapIndices        List of page indices to map,
+                                         can be NULL
+
+@Input          uiLog2PageSize          Log2 page size of the pages to map
+
+@Return         PVRSRV_OK if the mapping was successful
+*/
+/*****************************************************************************/
 extern PVRSRV_ERROR
 MMU_MapPages(MMU_CONTEXT *psMMUContext,
-				IMG_DEV_VIRTADDR sDevVAddrBase,
-				PMR *psPMR,
-				IMG_UINT32 ui32MapPageCount,
-				IMG_UINT32 *pai32MapIndices,
-				IMG_UINT8 uiLog2PageSize);
+             PVRSRV_MEMALLOCFLAGS_T uiMappingFlags,
+             IMG_DEV_VIRTADDR sDevVAddrBase,
+             PMR *psPMR,
+             IMG_UINT32 ui32PhysPgOffset,
+             IMG_UINT32 ui32MapPageCount,
+             IMG_UINT32 *paui32MapIndices,
+             IMG_UINT8 uiLog2PageSize);
 
 /*************************************************************************/ /*!
 @Function       MMU_UnmapPages
@@ -369,24 +390,39 @@ MMU_MapPages(MMU_CONTEXT *psMMUContext,
 
 @Input          psMMUContext            MMU context to operate on
 
+@Input          uiMappingFlags          Memalloc flags for the mapping
+
 @Input          psDevVAddr              Device virtual address of the 1st page
 
 @Input          ui32PageCount           Number of pages to unmap
+
+@Input          pai32UnmapIndicies      Array of page indices to be unmapped
+
+@Input          uiLog2PageSize          log2 size of the page
+
+
+@Input          bDummyBacking           Bool that indicates if the unmapped
+										regions need to be backed by dummy
+										page
 
 @Return         None
 */
 /*****************************************************************************/
 extern void
 MMU_UnmapPages (MMU_CONTEXT *psMMUContext,
+				PVRSRV_MEMALLOCFLAGS_T uiMappingFlags,
                 IMG_DEV_VIRTADDR sDevVAddr,
                 IMG_UINT32 ui32PageCount,
                 IMG_UINT32 *pai32UnmapIndicies,
-                IMG_UINT8 uiLog2PageSize);
+                IMG_UINT8 uiLog2PageSize,
+                IMG_BOOL bDummyBacking);
 
 /*************************************************************************/ /*!
-@Function       MMU_MapPMR
+@Function       MMU_MapPMRFast
 
-@Description    Map a PMR into the MMU.
+@Description    Map a PMR into the MMU. Must be not sparse.
+                This is supposed to cover most mappings and, as the name suggests,
+                should be as fast as possible.
 
 @Input          psMMUContext            MMU context to operate on
 
@@ -403,13 +439,35 @@ MMU_UnmapPages (MMU_CONTEXT *psMMUContext,
 */
 /*****************************************************************************/
 extern PVRSRV_ERROR
-MMU_MapPMR (MMU_CONTEXT *psMMUContext,
-            IMG_DEV_VIRTADDR sDevVAddr,
-            const PMR *psPMR,
-            IMG_DEVMEM_SIZE_T uiSizeBytes,
-            PVRSRV_MEMALLOCFLAGS_T uiMappingFlags,
-            IMG_UINT8 uiLog2PageSize);
+MMU_MapPMRFast (MMU_CONTEXT *psMMUContext,
+                IMG_DEV_VIRTADDR sDevVAddr,
+                const PMR *psPMR,
+                IMG_DEVMEM_SIZE_T uiSizeBytes,
+                PVRSRV_MEMALLOCFLAGS_T uiMappingFlags,
+                IMG_UINT8 uiLog2PageSize);
 
+/*************************************************************************/ /*!
+@Function       MMU_UnmapPMRFast
+
+@Description    Unmap pages from the MMU as fast as possible.
+                PMR must be non sparse!
+
+@Input          psMMUContext            MMU context to operate on
+
+@Input          sDevVAddrBase           Device virtual address of the 1st page
+
+@Input          ui32PageCount           Number of pages to unmap
+
+@Input          uiLog2PageSize          log2 size of the page
+
+@Return         None
+*/
+/*****************************************************************************/
+extern void
+MMU_UnmapPMRFast(MMU_CONTEXT *psMMUContext,
+                 IMG_DEV_VIRTADDR sDevVAddrBase,
+                 IMG_UINT32 ui32PageCount,
+                 IMG_UINT8 uiLog2PageSize);
 
 /*************************************************************************/ /*!
 @Function       MMU_ChangeValidity

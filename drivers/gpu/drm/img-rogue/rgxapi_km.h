@@ -102,9 +102,10 @@ PVRSRV_ERROR RGXHWPerfDisconnect(
 @Return         PVRSRV_ERROR:    for system error codes
 */ /***************************************************************************/
 PVRSRV_ERROR IMG_CALLCONV RGXHWPerfControl(
-		IMG_HANDLE  hDevData,
-		IMG_BOOL    bToggle,
-		IMG_UINT64  ui64Mask);
+		IMG_HANDLE           hDevData,
+		RGX_HWPERF_STREAM_ID eStreamId,
+		IMG_BOOL             bToggle,
+		IMG_UINT64           ui64Mask);
 
 
 /**************************************************************************/ /*!
@@ -166,6 +167,7 @@ PVRSRV_ERROR IMG_CALLCONV RGXHWPerfDisableCounters(
 */ /***************************************************************************/
 PVRSRV_ERROR RGXHWPerfAcquireData(
 		IMG_HANDLE  hDevData,
+		RGX_HWPERF_STREAM_ID eStreamId,
 		IMG_PBYTE*  ppBuf,
 		IMG_UINT32* pui32BufLen);
 
@@ -179,7 +181,8 @@ PVRSRV_ERROR RGXHWPerfAcquireData(
 */ /***************************************************************************/
 IMG_INTERNAL
 PVRSRV_ERROR RGXHWPerfReleaseData(
-		IMG_HANDLE hDevData);
+		IMG_HANDLE hDevData,
+		RGX_HWPERF_STREAM_ID eStreamId);
 
 
 #endif /* SUPPORT_KERNEL_HWPERF */

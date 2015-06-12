@@ -1,8 +1,9 @@
 /*************************************************************************/ /*!
 @File
-@Title          Services implementation of double linked lists
+@Title          Initialisation server internal header
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    Implements a double linked list
+@Description    Defines the connections between the various parts of the
+		initialisation server.
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -41,41 +42,30 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#include "img_types.h"
-#include "dllist.h"
+#ifndef __SRVINIT_H__
+#define __SRVINIT_H__
 
-#if defined(RGX_FIRMWARE)
-#include "rgxfw_cr_defs.h"
-#include "rgxfw_ctl.h"
+#if defined (__cplusplus)
+extern "C" {
 #endif
 
-/* Walk through all the nodes on the list until the end or a callback returns FALSE */
-#if defined(RGX_FIRMWARE)
-RGXFW_COREMEM_CODE
-#endif
-void dllist_foreach_node(PDLLIST_NODE psListHead,
-						 PFN_NODE_CALLBACK pfnCallBack,
-						 void *pvCallbackData)
-{
-	PDLLIST_NODE psWalker = psListHead->psNextNode;
-	PDLLIST_NODE psNextWalker;
+#include "img_defs.h"
+#include "pvrsrv_error.h"
+#include "device_connection.h"
 
-	while (psWalker != psListHead)
-	{
-		/*
-			The callback function could remove itself from the list
-			so to avoid NULL pointer deference save the next node pointer
-			before calling the callback
-		*/
-		psNextWalker = psWalker->psNextNode;
-		if (pfnCallBack(psWalker, pvCallbackData))
-		{
-			psWalker = psNextWalker;
-		}
-		else
-		{
-			break;
-		}
-	}
+PVRSRV_ERROR SrvInit(void);
+
+#if defined(SUPPORT_RGX)
+IMG_INTERNAL PVRSRV_ERROR RGXInit(SHARED_DEV_CONNECTION hServices);
+#endif
+
+IMG_INTERNAL void _ParseHTBAppHints(SHARED_DEV_CONNECTION hServices);
+
+#if defined (__cplusplus)
 }
+#endif
+#endif /* __SRVINIT_H__ */
 
+/******************************************************************************
+ End of file (srvinit.h)
+******************************************************************************/

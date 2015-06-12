@@ -94,9 +94,7 @@ typedef struct _PVRSRV_BRIDGE_DISPATCH_TABLE_ENTRY
 										arguments before calling into srvkm proper */
 	POS_LOCK	hBridgeLock;	/*!< The bridge lock which needs to be acquired 
 						before calling the above wrapper */
-	void		*pvBridgeBuffer;	/*!< The buffer that will be used for bridgeIn and bridgeOut structs during this bridge call */
-	IMG_UINT32	ui32BridgeInBufferSize;	/*!< Available bridge input buffer size */
-	IMG_UINT32	ui32BridgeOutBufferSize;	/*!< Available bridge output buffer size */
+	IMG_BOOL    bUseLock;                 /*!< Specify whether to use a bridge lock at all */
 #if defined(DEBUG_BRIDGE_KM)
 	const IMG_CHAR *pszIOCName; /*!< Name of the ioctl: e.g. "PVRSRV_BRIDGE_CONNECT_SERVICES" */
 	const IMG_CHAR *pszFunctionName; /*!< Name of the wrapper function: e.g. "PVRSRVConnectBW" */
@@ -129,18 +127,14 @@ _SetDispatchTableEntry(IMG_UINT32 ui32BridgeGroup,
 					   const IMG_CHAR *pszFunctionName,
 					   POS_LOCK hBridgeLock,
 					   const IMG_CHAR* pszBridgeLockName,
-					   IMG_BYTE* pbyBridgeBuffer,
-					   IMG_UINT32 ui32BridgeInBufferSize,
-					   IMG_UINT32 ui32BridgeOutBufferSize );
+					   IMG_BOOL bUseLock );
 
 
 /* PRQA S 0884,3410 2*/ /* macro relies on the lack of brackets */
 #define SetDispatchTableEntry(ui32BridgeGroup, ui32Index, pfFunction,\
-					hBridgeLock, pbyBridgeBuffer,\
-					ui32BridgeInBufferSize, ui32BridgeOutBufferSize) \
+					hBridgeLock, bUseLock) \
 	_SetDispatchTableEntry(PVRSRV_GET_BRIDGE_ID(ui32BridgeGroup), ui32Index, #ui32Index, (BridgeWrapperFunction)pfFunction, #pfFunction,\
-							(POS_LOCK)hBridgeLock, #hBridgeLock,\
-							pbyBridgeBuffer, ui32BridgeInBufferSize, ui32BridgeOutBufferSize )
+							(POS_LOCK)hBridgeLock, #hBridgeLock, bUseLock )
 
 #define DISPATCH_TABLE_GAP_THRESHOLD 5
 
@@ -159,6 +153,8 @@ typedef struct _PVRSRV_BRIDGE_GLOBAL_STATS
 extern PVRSRV_BRIDGE_GLOBAL_STATS g_BridgeGlobalStats;
 #endif
 
+PVRSRV_ERROR BridgeBufferPoolCreate(void);
+void BridgeBufferPoolDestroy(void);
 
 IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 					  PVRSRV_BRIDGE_PACKAGE   * psBridgePackageKM);

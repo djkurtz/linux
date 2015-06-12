@@ -130,6 +130,7 @@ PhysmemImportDmaBuf_exit:
  * Server bridge dispatch related glue 
  */
 
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitDMABUFBridge(void);
 PVRSRV_ERROR DeinitDMABUFBridge(void);
@@ -141,8 +142,7 @@ PVRSRV_ERROR InitDMABUFBridge(void)
 {
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DMABUF, PVRSRV_BRIDGE_DMABUF_PHYSMEMIMPORTDMABUF, PVRSRVBridgePhysmemImportDmaBuf,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;

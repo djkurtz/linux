@@ -55,13 +55,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync_internal.h"
 #include "rgx_memallocflags.h"
 
-/*
-	FIXME:
-	For now just get global state, but what we really want is to do
-	this per memory context
-*/
 static IMG_UINT32 gui32CacheOpps = 0;
-/* FIXME: End */
 
 typedef struct _SERVER_MMU_CONTEXT_ {
 	DEVMEM_MEMDESC *psFWMemContextMemDesc;
@@ -111,11 +105,7 @@ PVRSRV_ERROR RGXSLCCacheInvalidateRequest(PVRSRV_DEVICE_NODE *psDeviceNode,
 	{
 
 		/* get the PMR's caching flags */
-		eError = PMR_Flags(psPmr, &ulPMRFlags);
-		if (eError != PVRSRV_OK)
-		{
-			PVR_DPF((PVR_DBG_WARNING, "RGXSLCCacheInvalidateRequest: Unable to get the caching attributes of PMR %p",psPmr));
-		}
+		ulPMRFlags = PMR_Flags(psPmr);
 
 		ui32DeviceCacheFlags = DevmemDeviceCacheMode(ulPMRFlags);
 
@@ -214,7 +204,7 @@ PVRSRV_ERROR RGXPreKickCacheCommand(PVRSRV_RGXDEV_INFO *psDevInfo, RGXFWIF_DM eD
 	gui32CacheOpps = 0;
 
 	/* Schedule MMU cache command */
-	eError = RGXSendCommandRaw(psDevInfo,
+	eError = RGXSendCommand(psDevInfo,
 	                           eDM,
 	                           &sFlushCmd,
 	                           sizeof(RGXFWIF_KCCB_CMD),
@@ -292,7 +282,7 @@ void RGXUnregisterMemoryContext(IMG_HANDLE hPrivData)
 	/*
 	 * Release the page catalogue address acquired in RGXRegisterMemoryContext().
 	 */
-	MMU_ReleaseBaseAddr(NULL /* FIXME */);
+	MMU_ReleaseBaseAddr(NULL);
 	
 	/*
 	 * Free the firmware memory context.
@@ -357,7 +347,6 @@ PVRSRV_ERROR RGXRegisterMemoryContext(PVRSRV_DEVICE_NODE	*psDeviceNode,
 			application.
 		*/
 		PDUMPCOMMENT("Allocate RGX firmware memory context");
-		/* FIXME: why cache-consistent? */
 		eError = DevmemFwAllocate(psDevInfo,
 								sizeof(*psFWMemContext),
 								uiFWMemContextMemAllocFlags,
@@ -514,50 +503,36 @@ DEVMEM_MEMDESC *RGXGetFWMemDescFromMemoryContextHandle(IMG_HANDLE hPriv)
 	return psMMUContext->psFWMemContextMemDesc;
 }
 
-typedef struct _RGX_FAULT_DATA_ {
-	IMG_DEV_VIRTADDR *psDevVAddr;
-	IMG_DEV_PHYADDR *psDevPAddr;
-} RGX_FAULT_DATA;
-
-static IMG_BOOL _RGXCheckFaultAddress(PDLLIST_NODE psNode, void *pvCallbackData)
-{
-	SERVER_MMU_CONTEXT *psServerMMUContext = IMG_CONTAINER_OF(psNode, SERVER_MMU_CONTEXT, sNode);
-	RGX_FAULT_DATA *psFaultData = (RGX_FAULT_DATA *) pvCallbackData;
-	IMG_DEV_PHYADDR sPCDevPAddr;
-	
-	if (MMU_AcquireBaseAddr(psServerMMUContext->psMMUContext, &sPCDevPAddr) != PVRSRV_OK)
-	{
-		PVR_LOG(("Failed to get PC address for memory context"));
-		return IMG_TRUE;
-	}
-
-	if (psFaultData->psDevPAddr->uiAddr == sPCDevPAddr.uiAddr)
-	{
-		DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf = g_pfnDumpDebugPrintf;
-		
-		PVR_DUMPDEBUG_LOG(("Found memory context (PID = %d, %s)",
-				 psServerMMUContext->uiPID,
-				 psServerMMUContext->szProcessName));
-
-		MMU_CheckFaultAddress(psServerMMUContext->psMMUContext, psFaultData->psDevVAddr);
-		return IMG_FALSE;
-	}
-	return IMG_TRUE;
-}
-
 void RGXCheckFaultAddress(PVRSRV_RGXDEV_INFO *psDevInfo, IMG_DEV_VIRTADDR *psDevVAddr, IMG_DEV_PHYADDR *psDevPAddr)
 {
-	RGX_FAULT_DATA sFaultData;
 	IMG_DEV_PHYADDR sPCDevPAddr;
-
-	sFaultData.psDevVAddr = psDevVAddr;
-	sFaultData.psDevPAddr = psDevPAddr;
+	DLLIST_NODE *psNode, *psNext;
 
 	OSWRLockAcquireRead(psDevInfo->hMemoryCtxListLock);
 
-	dllist_foreach_node(&psDevInfo->sMemoryContextList,
-						_RGXCheckFaultAddress,
-						&sFaultData);
+	dllist_foreach_node(&psDevInfo->sMemoryContextList, psNode, psNext)
+	{
+		SERVER_MMU_CONTEXT *psServerMMUContext =
+			IMG_CONTAINER_OF(psNode, SERVER_MMU_CONTEXT, sNode);
+
+		if (MMU_AcquireBaseAddr(psServerMMUContext->psMMUContext, &sPCDevPAddr) != PVRSRV_OK)
+		{
+			PVR_LOG(("Failed to get PC address for memory context"));
+			continue;
+		}
+
+		if (psDevPAddr->uiAddr == sPCDevPAddr.uiAddr)
+		{
+			DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf = g_pfnDumpDebugPrintf;
+
+			PVR_DUMPDEBUG_LOG(("Found memory context (PID = %d, %s)",
+							   psServerMMUContext->uiPID,
+							   psServerMMUContext->szProcessName));
+
+			MMU_CheckFaultAddress(psServerMMUContext->psMMUContext, psDevVAddr);
+			break;
+		}
+	}
 
 	/* Lastly check for fault in the kernel allocated memory */
 	if (MMU_AcquireBaseAddr(psDevInfo->psKernelMMUCtx, &sPCDevPAddr) != PVRSRV_OK)
@@ -565,43 +540,12 @@ void RGXCheckFaultAddress(PVRSRV_RGXDEV_INFO *psDevInfo, IMG_DEV_VIRTADDR *psDev
 		PVR_LOG(("Failed to get PC address for kernel memory context"));
 	}
 
-	if (sFaultData.psDevPAddr->uiAddr == sPCDevPAddr.uiAddr)
+	if (psDevPAddr->uiAddr == sPCDevPAddr.uiAddr)
 	{
 		MMU_CheckFaultAddress(psDevInfo->psKernelMMUCtx, psDevVAddr);
 	}
 
 	OSWRLockReleaseRead(psDevInfo->hMemoryCtxListLock);
-}
-
-/* input for query to find the MMU context corresponding to a
- * page catalogue address
- */
-typedef struct _RGX_FIND_MMU_CONTEXT_
-{
-	IMG_DEV_PHYADDR sPCAddress;
-	SERVER_MMU_CONTEXT *psServerMMUContext;
-	MMU_CONTEXT *psMMUContext;
-} RGX_FIND_MMU_CONTEXT;
-
-static IMG_BOOL _RGXFindMMUContext(PDLLIST_NODE psNode, void *pvCallbackData)
-{
-	SERVER_MMU_CONTEXT *psServerMMUContext = IMG_CONTAINER_OF(psNode, SERVER_MMU_CONTEXT, sNode);
-	RGX_FIND_MMU_CONTEXT *psData = pvCallbackData;
-	IMG_DEV_PHYADDR sPCDevPAddr;
-
-	if (MMU_AcquireBaseAddr(psServerMMUContext->psMMUContext, &sPCDevPAddr) != PVRSRV_OK)
-	{
-		PVR_LOG(("Failed to get PC address for memory context"));
-		return IMG_TRUE;
-	}
-
-	if (psData->sPCAddress.uiAddr == sPCDevPAddr.uiAddr)
-	{
-		psData->psServerMMUContext = psServerMMUContext;
-
-		return IMG_FALSE;
-	}
-	return IMG_TRUE;
 }
 
 /* given the physical address of a page catalogue, searches for a corresponding
@@ -611,19 +555,34 @@ static IMG_BOOL _RGXFindMMUContext(PDLLIST_NODE psNode, void *pvCallbackData)
 IMG_BOOL RGXPCAddrToProcessInfo(PVRSRV_RGXDEV_INFO *psDevInfo, IMG_DEV_PHYADDR sPCAddress,
 								RGXMEM_PROCESS_INFO *psInfo)
 {
-	RGX_FIND_MMU_CONTEXT sData;
 	IMG_BOOL bRet = IMG_FALSE;
-
-	sData.sPCAddress = sPCAddress;
-	sData.psServerMMUContext = NULL;
+	DLLIST_NODE *psNode, *psNext;
+	SERVER_MMU_CONTEXT *psServerMMUContext = NULL;
 
 	/* check if the input PC addr corresponds to an active memory context */
-	dllist_foreach_node(&psDevInfo->sMemoryContextList, _RGXFindMMUContext, &sData);
-
-	if(sData.psServerMMUContext != NULL)
+	dllist_foreach_node(&psDevInfo->sMemoryContextList, psNode, psNext)
 	{
-		psInfo->uiPID = sData.psServerMMUContext->uiPID;
-		OSStringNCopy(psInfo->szProcessName, sData.psServerMMUContext->szProcessName, sizeof(psInfo->szProcessName));
+		SERVER_MMU_CONTEXT *psThisMMUContext =
+			IMG_CONTAINER_OF(psNode, SERVER_MMU_CONTEXT, sNode);
+		IMG_DEV_PHYADDR sPCDevPAddr;
+
+		if (MMU_AcquireBaseAddr(psThisMMUContext->psMMUContext, &sPCDevPAddr) != PVRSRV_OK)
+		{
+			PVR_LOG(("Failed to get PC address for memory context"));
+			continue;
+		}
+
+		if (sPCAddress.uiAddr == sPCDevPAddr.uiAddr)
+		{
+			psServerMMUContext = psThisMMUContext;
+			break;
+		}
+	}
+
+	if(psServerMMUContext != NULL)
+	{
+		psInfo->uiPID = psServerMMUContext->uiPID;
+		OSStringNCopy(psInfo->szProcessName, psServerMMUContext->szProcessName, sizeof(psInfo->szProcessName));
 		psInfo->szProcessName[sizeof(psInfo->szProcessName) - 1] = '\0';
 		psInfo->bUnregistered = IMG_FALSE;
 		bRet = IMG_TRUE;
@@ -686,44 +645,30 @@ IMG_BOOL RGXPCAddrToProcessInfo(PVRSRV_RGXDEV_INFO *psDevInfo, IMG_DEV_PHYADDR s
 	return bRet;
 }
 
-/* input for query to find the MMU context corresponding to a PID */
-typedef struct _RGX_FIND_MMU_CONTEXT_BY_PID_
-{
-	IMG_PID uiPID;
-	SERVER_MMU_CONTEXT *psServerMMUContext;
-	MMU_CONTEXT *psMMUContext;
-} RGX_FIND_MMU_CONTEXT_BY_PID;
-
-static IMG_BOOL _RGXFindMMUContextByPID(PDLLIST_NODE psNode, void *pvCallbackData)
-{
-	SERVER_MMU_CONTEXT *psServerMMUContext = IMG_CONTAINER_OF(psNode, SERVER_MMU_CONTEXT, sNode);
-	RGX_FIND_MMU_CONTEXT_BY_PID *psData = pvCallbackData;
-
-	if (psData->uiPID == psServerMMUContext->uiPID)
-	{
-		psData->psServerMMUContext = psServerMMUContext;
-
-		return IMG_FALSE;
-	}
-	return IMG_TRUE;
-}
-
 IMG_BOOL RGXPCPIDToProcessInfo(PVRSRV_RGXDEV_INFO *psDevInfo, IMG_PID uiPID,
 								RGXMEM_PROCESS_INFO *psInfo)
 {
-	RGX_FIND_MMU_CONTEXT_BY_PID sData;
 	IMG_BOOL bRet = IMG_FALSE;
-
-	sData.uiPID = uiPID;
-	sData.psServerMMUContext = NULL;
+	DLLIST_NODE *psNode, *psNext;
+	SERVER_MMU_CONTEXT *psServerMMUContext = NULL;
 
 	/* check if the input PID corresponds to an active memory context */
-	dllist_foreach_node(&psDevInfo->sMemoryContextList, _RGXFindMMUContextByPID, &sData);
-
-	if(sData.psServerMMUContext != NULL)
+	dllist_foreach_node(&psDevInfo->sMemoryContextList, psNode, psNext)
 	{
-		psInfo->uiPID = sData.psServerMMUContext->uiPID;
-		OSStringNCopy(psInfo->szProcessName, sData.psServerMMUContext->szProcessName, sizeof(psInfo->szProcessName));
+		SERVER_MMU_CONTEXT *psThisMMUContext =
+			IMG_CONTAINER_OF(psNode, SERVER_MMU_CONTEXT, sNode);
+
+		if (psThisMMUContext->uiPID == uiPID)
+		{
+			psServerMMUContext = psThisMMUContext;
+			break;
+		}
+	}
+
+	if(psServerMMUContext != NULL)
+	{
+		psInfo->uiPID = psServerMMUContext->uiPID;
+		OSStringNCopy(psInfo->szProcessName, psServerMMUContext->szProcessName, sizeof(psInfo->szProcessName));
 		psInfo->szProcessName[sizeof(psInfo->szProcessName) - 1] = '\0';
 		psInfo->bUnregistered = IMG_FALSE;
 		bRet = IMG_TRUE;

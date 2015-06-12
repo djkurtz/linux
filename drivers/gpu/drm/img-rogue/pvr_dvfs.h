@@ -87,7 +87,6 @@ typedef struct _IMG_DVFS_GOVERNOR_
 #if defined(__linux__)
 typedef struct _IMG_DVFS_DEVICE_
 {
-	POS_LOCK			hDVFSLock;
 	struct dev_pm_opp		*psOPP;
 	struct devfreq			*psDevFreq;
 	IMG_BOOL			bEnabled;

@@ -89,6 +89,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "syscommon.h"
 #endif
 #include "physmem_osmem_linux.h"
+#if defined(SUPPORT_PVRSRV_GPUVIRT)
+#include "virt_support.h"
+#endif
 
 #if defined(VIRTUAL_PLATFORM)
 #define EVENT_OBJECT_TIMEOUT_MS         (120000)
@@ -100,9 +103,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif /* EMULATOR */
 #endif
 
-/* Fairly arbitrary sizes - hopefully enough for all bridge calls */
-#define PVRSRV_MAX_BRIDGE_IN_SIZE	0x2000
-#define PVRSRV_MAX_BRIDGE_OUT_SIZE	0x1000
+/* Use a pool for PhysContigPages on x86 32bit so we avoid virtual address space fragmentation by vm_map_ram.
+ * ARM does not have the function to invalidate TLB entries so they have to use the kernel functions directly. */
+#if defined(CONFIG_GENERIC_ALLOCATOR) \
+        && defined(CONFIG_X86) \
+        && !defined(CONFIG_64BIT) \
+        && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#define OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL 1
+#endif
 
 static void *g_pvBridgeBuffers = NULL;
 
@@ -113,7 +121,7 @@ struct task_struct *OSGetBridgeLockOwner(void);
 	if it becomes full then the calling code will fall back to vmap.
 */
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 #define POOL_SIZE	(4*1024*1024)
 static struct gen_pool *pvrsrv_pool_writecombine = NULL;
 static char *pool_start;
@@ -179,38 +187,39 @@ static inline IMG_BOOL vmap_from_pool(void *pvCPUVAddr)
 	}
 	return IMG_FALSE;
 }
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))*/
+#endif	/* #if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 
-PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
-						  Px_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr)
+PVRSRV_ERROR OSPhyContigPagesAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
+							PG_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr)
 {
 	IMG_CPU_PHYADDR sCpuPAddr;
 	struct page *psPage;
-	unsigned int log2NumPages = 0;
-	unsigned int numPages;
+	IMG_UINT32	ui32Order=0;
 
-	/* Extract the minimum order to fit the allocation */
-	log2NumPages = OSGetOrder(uiSize);
-	/* Calculate the number of pages actually required */
-	numPages = (uiSize != 0) ? (1 << log2NumPages) : 0;
-	/* Adjusting the actual size */
-	uiSize = numPages * PAGE_SIZE;
+	PVR_ASSERT(uiSize != 0);
+	/*Align the size to the page granularity */
+	uiSize = PAGE_ALIGN(uiSize);
 
-	psPage = alloc_pages(GFP_KERNEL, log2NumPages);
+	/*Get the order to be used with the allocation */
+	ui32Order = get_order(uiSize);
+
+	/*allocate the pages */
+	psPage = alloc_pages(GFP_KERNEL, ui32Order);
 	if (psPage == NULL)
 	{
 		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
+	uiSize = (1 << ui32Order) * PAGE_SIZE;
 
 #if defined(CONFIG_X86)
 	{
 		void *pvPageVAddr = page_address(psPage);
 		int ret;
-		ret = set_memory_wc((unsigned long)pvPageVAddr, numPages);
+		ret = set_memory_wc((unsigned long)pvPageVAddr, (1 << ui32Order));
 
 		if (ret)
 		{
-			__free_pages(psPage, log2NumPages);
+			__free_pages(psPage, ui32Order);
 			return PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
 		}
 	}
@@ -221,22 +230,23 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
 		IMG_CPU_PHYADDR sCPUPhysAddrStart, sCPUPhysAddrEnd;
 		void *pvPageVAddr;
 
-		for (ui32Count = 0; ui32Count < numPages; ui32Count++)
+		for (ui32Count = 0; ui32Count < (1 << ui32Order); ui32Count++)
 		{
-			sCPUPhysAddrStart.uiAddr = page_to_phys(psPage + ui32Count);
+			sCPUPhysAddrStart.uiAddr = IMG_CAST_TO_CPUPHYADDR_UINT(page_to_phys(psPage + ui32Count));
 			sCPUPhysAddrEnd.uiAddr = sCPUPhysAddrStart.uiAddr + PAGE_SIZE;
 			pvPageVAddr = kmap(psPage + ui32Count);
 			OSInvalidateCPUCacheRangeKM(pvPageVAddr,
 									pvPageVAddr + PAGE_SIZE,
 									sCPUPhysAddrStart,
 									sCPUPhysAddrEnd);
+			kunmap(psPage + ui32Count);
 		}
 	}
 #endif
 
 	psMemHandle->u.pvHandle = psPage;
-	psMemHandle->uiSize = uiSize;
-	sCpuPAddr.uiAddr = page_to_phys(psPage);
+	psMemHandle->ui32Order = ui32Order;
+	sCpuPAddr.uiAddr =  IMG_CAST_TO_CPUPHYADDR_UINT(page_to_phys(psPage));
 
 	/*
 	 * Even when more pages are allocated as base MMU object we still need one single physical address because
@@ -246,7 +256,7 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
 
 #if defined(PVRSRV_ENABLE_PROCESS_STATS)
 #if !defined(PVRSRV_ENABLE_MEMORY_STATS)
-		PVRSRVStatsIncrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES_PT_UMA, uiSize);
+	    PVRSRVStatsIncrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES_PT_UMA, uiSize);
 #else
 	PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES_PT_UMA,
 								 psPage,
@@ -259,14 +269,17 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
 	return PVRSRV_OK;
 }
 
-void OSMMUPxFree(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle)
+void OSPhyContigPagesFree(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle)
 {
 	struct page *psPage = (struct page*) psMemHandle->u.pvHandle;
-	unsigned int order = OSGetOrder(psMemHandle->uiSize);
+	IMG_UINT32	uiSize, uiPageCount=0;
+
+	uiPageCount = (1 << psMemHandle->ui32Order);
+	uiSize = (uiPageCount * PAGE_SIZE);
 
 #if defined(PVRSRV_ENABLE_PROCESS_STATS)
 #if !defined(PVRSRV_ENABLE_MEMORY_STATS)
-		PVRSRVStatsDecrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES_PT_UMA, psMemHandle->uiSize);
+	    PVRSRVStatsDecrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES_PT_UMA, uiSize);
 #else
 	PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES_PT_UMA, (IMG_UINT64)(uintptr_t)psPage);
 #endif
@@ -276,33 +289,33 @@ void OSMMUPxFree(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle)
 	{
 		void *pvPageVAddr;
 		int ret;
-		unsigned int numPages = (psMemHandle->uiSize != 0) ? (1 << order) : 0;
 		pvPageVAddr = page_address(psPage);
-		ret = set_memory_wb((unsigned long) pvPageVAddr, numPages);
+		ret = set_memory_wb((unsigned long) pvPageVAddr, uiPageCount);
 		if (ret)
 		{
 			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to reset page attribute", __FUNCTION__));
 		}
 	}
 #endif
-	__free_pages(psPage, order);
-	psMemHandle->uiSize = 0;
+	__free_pages(psPage, psMemHandle->ui32Order);
+	psMemHandle->ui32Order = 0;
 }
 
-PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
+PVRSRV_ERROR OSPhyContigPagesMap(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle,
 						size_t uiSize, IMG_DEV_PHYADDR *psDevPAddr,
 						void **pvPtr)
 {
 	struct page *psPage = (struct page *) psMemHandle->u.pvHandle;
-	size_t actualSize = psMemHandle->uiSize;
+	size_t actualSize = (1 << psMemHandle->ui32Order) * PAGE_SIZE;
 	/* Calculate the number of pages to actually map in */
-	unsigned int numPages = ALIGN(actualSize, PAGE_SIZE) / PAGE_SIZE;
+	unsigned int numPages = (1 << psMemHandle->ui32Order);
 	unsigned int i;
 	struct page *apsPage[numPages];
 	struct page **ppsPage = &(apsPage[0]);
 	uintptr_t uiCPUVAddr;
 	pgprot_t prot = PAGE_KERNEL;
 
+	PVR_UNREFERENCED_PARAMETER(actualSize); /* If we don't take an #ifdef path */
 	PVR_UNREFERENCED_PARAMETER(uiSize);
 	PVR_UNREFERENCED_PARAMETER(psDevNode);
 
@@ -313,7 +326,7 @@ PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 
 	prot = pgprot_writecombine(prot);
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	uiCPUVAddr = gen_pool_alloc(pvrsrv_pool_writecombine, actualSize);
 
 	if (uiCPUVAddr) {
@@ -340,9 +353,9 @@ PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 
 	/* Not else as if the poll alloc fails it resets uiCPUVAddr to 0 */
 	if (uiCPUVAddr == 0)
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0)) */
+#endif	/* #if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 	{
-#if defined(PVRSRV_USE_VMAP_FOR_KERNEL_MAPPINGS)
+#if !defined(CONFIG_64BIT) || defined(PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS)
 		uiCPUVAddr = (uintptr_t) vmap(ppsPage, numPages, VM_READ | VM_WRITE, prot);
 #else
 		uiCPUVAddr = (uintptr_t) vm_map_ram(ppsPage,
@@ -381,47 +394,44 @@ PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 	return PVRSRV_OK;
 }
 
-void OSMMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle, void *pvPtr)
+void OSPhyContigPagesUnmap(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle, void *pvPtr)
 {
-	unsigned int numPages = ALIGN(psMemHandle->uiSize, PAGE_SIZE) / PAGE_SIZE;
-
 	PVR_UNREFERENCED_PARAMETER(psDevNode);
 
 #if defined(PVRSRV_ENABLE_PROCESS_STATS)
 #if !defined(PVRSRV_ENABLE_MEMORY_STATS)
-	PVRSRVStatsDecrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_VMAP_PT_UMA, psMemHandle->uiSize);
+	/* Mapping is done a page at a time */
+	PVRSRVStatsDecrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_VMAP_PT_UMA, (PAGE_SIZE << psMemHandle->ui32Order));
 #else
 	PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_VMAP_PT_UMA, (IMG_UINT64)(uintptr_t)pvPtr);
 #endif
 #endif
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	if (vmap_from_pool(pvPtr))
 	{
-		unsigned int i;
+		IMG_UINT32 ui32Count;
 		unsigned long addr = (unsigned long)pvPtr;
-		unsigned long addr_tmp = addr;
 
 		/* Flush the data cache */
-		flush_cache_vunmap(addr, addr + psMemHandle->uiSize);
+		flush_cache_vunmap(addr, addr + (PAGE_SIZE << psMemHandle->ui32Order));
 		/* Unmap the page */
-		unmap_kernel_range_noflush(addr, psMemHandle->uiSize);
+		unmap_kernel_range_noflush(addr, (PAGE_SIZE << psMemHandle->ui32Order));
 		/* Flush the TLB */
-		for (i = 0; i < numPages; i++, addr_tmp += PAGE_SIZE)
+		for (ui32Count = 0; ui32Count < (1 << psMemHandle->ui32Order); ui32Count++)
 		{
-			__flush_tlb_single(addr_tmp);
+			__flush_tlb_single(addr + (ui32Count * PAGE_SIZE));
 		}
 		/* Free the page back to the pool */
-		gen_pool_free(pvrsrv_pool_writecombine, addr, psMemHandle->uiSize);
+		gen_pool_free(pvrsrv_pool_writecombine, addr, (PAGE_SIZE << psMemHandle->ui32Order));
 	}
 	else
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0)) */
+#endif	/* #if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 	{
-#if defined(PVRSRV_USE_VMAP_FOR_KERNEL_MAPPINGS)
+#if !defined(CONFIG_64BIT) || defined(PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS)
 		vunmap(pvPtr);
-		PVR_UNREFERENCED_PARAMETER(numPages);
 #else
-		vm_unmap_ram(pvPtr, numPages);
+		vm_unmap_ram(pvPtr, (1 << psMemHandle->ui32Order));
 #endif
 	}
 }
@@ -432,6 +442,31 @@ void OSMMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle, void *p
 #else
 #error "PVRSRV Alignment macros need to be defined for this compiler"
 #endif
+
+/*************************************************************************/ /*!
+@Function       OSCPUCacheAttributeSize
+@Description    Lookup dcache attribute sizes
+@Input          eCacheAttribute
+*/ /**************************************************************************/
+IMG_UINT32 OSCPUCacheAttributeSize(IMG_DCACHE_ATTRIBUTE eCacheAttribute)
+{
+	IMG_UINT32 uiSize = 0;
+
+	switch(eCacheAttribute)
+	{
+		case PVR_DCACHE_LINE_SIZE:
+			uiSize = cache_line_size();
+			break;
+
+		default:
+			PVR_DPF((PVR_DBG_ERROR, "%s: Invalid cache attribute type %d",
+					__FUNCTION__, (IMG_UINT32)eCacheAttribute));
+			PVR_ASSERT(0);
+			break;
+	}
+
+	return uiSize;
+}
 
 /*************************************************************************/ /*!
 @Function       OSMemCopy
@@ -628,7 +663,7 @@ PVRSRV_ERROR OSInitEnvData(void)
 		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	/*
 		vm_ram_ram works with 2MB blocks to avoid excessive
 		TLB flushing but our allocations are always small and have
@@ -640,9 +675,9 @@ PVRSRV_ERROR OSInitEnvData(void)
 	{
 		init_pvr_pool();
 	}
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0)) */
+#endif	/* #if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 
-	LinuxInitPagePool();
+	LinuxInitPhysmem();
 
 	return PVRSRV_OK;
 }
@@ -657,9 +692,9 @@ PVRSRV_ERROR OSInitEnvData(void)
 void OSDeInitEnvData(void)
 {
 
-	LinuxDeinitPagePool();
+	LinuxDeinitPhysmem();
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	if (pvrsrv_pool_writecombine)
 	{
 		deinit_pvr_pool();
@@ -928,23 +963,31 @@ size_t OSGetPageMask(void)
 
 /*************************************************************************/ /*!
 @Function       OSGetOrder
-@Description    gets the minimum order to accommodate an allocation of uiSize bytes
-				returns 0 if uiSize == 0
+@Description    gets log base 2 (Order) value of the given size
 @Return         order
 */ /**************************************************************************/
-unsigned int OSGetOrder(size_t uiSize)
+size_t OSGetOrder(size_t uSize)
 {
-	unsigned int order;
-	/* This code allocates the minimum power of two pages needed to
-	   accommodate the uiSize parameter.*/
-	uiSize = ALIGN(uiSize, OSGetPageSize());
-	/* Extract the minimum order to fit the allocation */
-	order = CeilLog2((unsigned int)(uiSize / (OSGetPageSize())));
-	return order;
+	return get_order(PAGE_ALIGN(uSize));
 }
 
-
-#if !defined (SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+#if !defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+#if defined(PVRSRV_GPUVIRT_GUESTDRV) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL)
+/*
+	Device interrupt (ISR/LISR) management is predicated on the following:
+		- For normal/hyperv drivers:
+			- Perform device interrupt management directly (normal case)
+		- For guest drivers, behaviour depends on:
+			- If running on a multi-driver model (same OS instance)
+				- Delegate management to hypervisor driver
+				- Register guest driver device LISRs with hyperv
+				- Hypervisor triggers guests driver device LISRs
+			- Else assume hypervisor vm monitor exposes device/irq abstraction
+				- Manage this virtual device/irq directly like a normal driver
+				- Hypervisor vm monitor triggers device/irq abstraction
+				- Setup for this is outside the scope of the DDK
+ */
+#else
 typedef struct _LISR_DATA_ {
 	PFN_LISR pfnLISR;
 	void *pvData;
@@ -961,10 +1004,14 @@ static irqreturn_t DeviceISRWrapper(int irq, void *dev_id)
 
 	PVR_UNREFERENCED_PARAMETER(irq);
 
-	bStatus = psLISRData->pfnLISR(psLISRData->pvData);
+#if defined(SUPPORT_PVRSRV_GPUVIRT) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL)
+	bStatus = SysVirtTriggerAllGuestDeviceLISR() == PVRSRV_OK ? IMG_TRUE : IMG_FALSE;
+#endif
+	bStatus |= psLISRData->pfnLISR(psLISRData->pvData);
 
 	return bStatus ? IRQ_HANDLED : IRQ_NONE;
 }
+#endif
 #endif
 
 /*
@@ -981,6 +1028,14 @@ PVRSRV_ERROR OSInstallDeviceLISR(PVRSRV_DEVICE_CONFIG *psDevConfig,
 					pfnLISR,
 					pvData,
 					hLISRData);
+#else
+#if defined(PVRSRV_GPUVIRT_GUESTDRV) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL)
+	return GuestBridgeSysInstallDeviceLISR(PVRSRV_GPUVIRT_OSID,
+									psDevConfig->ui32IRQ,
+									psDevConfig->pszName,
+									pfnLISR,
+									pvData,
+									hLISRData);
 #else
 	LISR_DATA *psLISRData;
 	unsigned long flags = 0;
@@ -1005,12 +1060,15 @@ PVRSRV_ERROR OSInstallDeviceLISR(PVRSRV_DEVICE_CONFIG *psDevConfig,
 		flags |= IRQF_TRIGGER_LOW;
 	}
 
-	PVR_TRACE(("Installing device LISR %s on IRQ %d with cookie %p", psDevConfig->pszName, psDevConfig->ui32IRQ, pvData));
+	PVR_TRACE(("Installing device LISR %s on IRQ %d with cookie %p", 
+				psDevConfig->pszName, psDevConfig->ui32IRQ, pvData));
 
 	if(request_irq(psDevConfig->ui32IRQ, DeviceISRWrapper,
 		flags, psDevConfig->pszName, psLISRData))
 	{
-		PVR_DPF((PVR_DBG_ERROR,"OSInstallDeviceLISR: Couldn't install device LISR on IRQ %d", psDevConfig->ui32IRQ));
+		PVR_DPF((PVR_DBG_ERROR,
+				"OSInstallDeviceLISR: Couldn't install device LISR on IRQ %d", 
+				psDevConfig->ui32IRQ));
 
 		return PVRSRV_ERROR_UNABLE_TO_INSTALL_ISR;
 	}
@@ -1018,6 +1076,7 @@ PVRSRV_ERROR OSInstallDeviceLISR(PVRSRV_DEVICE_CONFIG *psDevConfig,
 	*hLISRData = (IMG_HANDLE) psLISRData;
 
 	return PVRSRV_OK;
+#endif
 #endif
 }
 
@@ -1029,6 +1088,9 @@ PVRSRV_ERROR OSUninstallDeviceLISR(IMG_HANDLE hLISRData)
 #if defined (SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 	return SysUninstallDeviceLISR(hLISRData);
 #else
+#if defined(PVRSRV_GPUVIRT_GUESTDRV) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL)
+	return GuestBridgeSysUninstallDeviceLISR(PVRSRV_GPUVIRT_OSID, hLISRData);
+#else
 	LISR_DATA *psLISRData = (LISR_DATA *) hLISRData;
 
 	PVR_TRACE(("Uninstalling device LISR on IRQ %d with cookie %p", psLISRData->ui32IRQ,  psLISRData->pvData));
@@ -1037,6 +1099,7 @@ PVRSRV_ERROR OSUninstallDeviceLISR(IMG_HANDLE hLISRData)
 	OSFreeMem(psLISRData);
 
 	return PVRSRV_OK;
+#endif	
 #endif
 }
 
@@ -1077,7 +1140,7 @@ PVRSRV_ERROR OSInstallMISR(IMG_HANDLE *hMISRData, PFN_MISR pfnMISR,
 
 	PVR_TRACE(("Installing MISR with cookie %p", psMISRData));
 
-	psMISRData->psWorkQueue = create_singlethread_workqueue("pvr_workqueue");
+	psMISRData->psWorkQueue = create_singlethread_workqueue("pvr_workqueue" PVRSRV_GPUVIRT_OSID_STR);
 
 	if (psMISRData->psWorkQueue == NULL)
 	{
@@ -1432,7 +1495,7 @@ IMG_UINT8 OSReadHWReg8(void *pvLinRegBaseAddr,
 #if !defined(NO_HARDWARE)
 	return (IMG_UINT8) readb((IMG_PBYTE)pvLinRegBaseAddr+ui32Offset);
 #else
-	return 0x4e;	/* FIXME: OSReadHWReg should not exist in no hardware builds */
+	return 0x4e;
 #endif
 }
 
@@ -1445,7 +1508,7 @@ IMG_UINT16 OSReadHWReg16(void *pvLinRegBaseAddr,
 #if !defined(NO_HARDWARE)
 	return (IMG_UINT16) readw((IMG_PBYTE)pvLinRegBaseAddr+ui32Offset);
 #else
-	return 0x3a4e;	/* FIXME: OSReadHWReg should not exist in no hardware builds */
+	return 0x3a4e;
 #endif
 }
 
@@ -1458,7 +1521,7 @@ IMG_UINT32 OSReadHWReg32(void *pvLinRegBaseAddr,
 #if !defined(NO_HARDWARE)
 	return (IMG_UINT32) readl((IMG_PBYTE)pvLinRegBaseAddr+ui32Offset);
 #else
-	return 0x30f73a4e;	/* FIXME: OSReadHWReg should not exist in no hardware builds */
+	return 0x30f73a4e;
 #endif
 }
 
@@ -1488,8 +1551,6 @@ IMG_DEVMEM_SIZE_T OSReadHWRegBank(void *pvLinRegBaseAddr,
 {
 #if !defined(NO_HARDWARE)
 	IMG_DEVMEM_SIZE_T uiCounter;
-
-	/* FIXME: optimize this */
 
 	for(uiCounter = 0; uiCounter < uiDstBufLen; uiCounter++) {
 		*(pui8DstBuf + uiCounter) =
@@ -1564,8 +1625,6 @@ IMG_DEVMEM_SIZE_T OSWriteHWRegBank(void *pvLinRegBaseAddr,
 {
 #if !defined(NO_HARDWARE)
 	IMG_DEVMEM_SIZE_T uiCounter;
-
-	/* FIXME: optimize this */
 
 	for(uiCounter = 0; uiCounter < uiSrcBufLen; uiCounter++) {
 		writeb(*(pui8SrcBuf + uiCounter),
@@ -2151,7 +2210,7 @@ PVRSRV_ERROR PVROSFuncInit(void)
 	{
 		PVR_ASSERT(!psTimerWorkQueue);
 
-		psTimerWorkQueue = create_workqueue("pvr_timer");
+		psTimerWorkQueue = create_workqueue("pvr_timer" PVRSRV_GPUVIRT_OSID_STR);
 		if (psTimerWorkQueue == NULL)
 		{
 			PVR_DPF((PVR_DBG_ERROR, "%s: couldn't create timer workqueue", __FUNCTION__));
@@ -2309,15 +2368,13 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 	struct vm_area_struct *psVMA=NULL;
 	IMG_UINT64 uiPFN = 0, uiCPUVirtAddr=0;
 	IMG_UINT32	ui32Loop=0, ui32PageSize = OSGetPageSize();
-
-#if defined(PVR_MMAP_USE_VM_INSERT)
 	struct address_space *mapping = NULL;
 	IMG_BOOL bMixedMap = IMG_FALSE;
-#endif
 	struct page *page = NULL;
 	PVR_UNREFERENCED_PARAMETER(pui32Status);
 
-	/*Acquire the lock before manipulating the VMA
+	/*
+	 * Acquire the lock before manipulating the VMA
 	 * In this case only mmap_sem lock would suffice as the pages associated with this VMA
 	 * are never meant to be swapped out
 	 *
@@ -2331,14 +2388,14 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 		eError = PVRSRV_ERROR_PMR_NO_CPU_MAP_FOUND;
 		return eError;
 	}
+
 	/*Acquire the memory sem */
 	down_write(&psMM->mmap_sem);
 
-#if defined(PVR_MMAP_USE_VM_INSERT)
 	mapping = psVMA->vm_file->f_mapping;
+	
 	/*Set the page offset to the correct value as this is disturbed in MMAP_PMR func*/
 	psVMA->vm_pgoff = (psVMA->vm_start >>  PAGE_SHIFT);
-#endif
 
 	/*Delete the entries for the pages that got freed */
 	if(ui32FreePageCount && (pai32FreeIndices != NULL))
@@ -2346,35 +2403,27 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 		for(ui32Loop = 0; ui32Loop < ui32FreePageCount; ui32Loop++)
 		{
 			uiCPUVirtAddr = (uintptr_t)(sCpuVAddrBase+(pai32FreeIndices[ui32Loop] * ui32PageSize));
-#if defined(PVR_MMAP_USE_VM_INSERT)
-			unmap_mapping_range(mapping,uiCPUVirtAddr,ui32PageSize,1);
-#else
-			if(zap_vma_ptes(psVMA, uiCPUVirtAddr, ui32PageSize))
-			{
 
-				PVR_DPF((PVR_DBG_MESSAGE,"%s: Unmapping of the Free pages failed, CPUAddr: 0x%16lx",__func__, \
-						(uintptr_t)(sCpuVAddrBase+(pai32FreeIndices[ui32Loop] * ui32PageSize))));
-				eError = PVRSRV_ERROR_PMR_CPU_PAGE_UNMAP_FAILED;
-				goto eFailed;
-			}
-#endif
+			unmap_mapping_range(mapping,uiCPUVirtAddr,ui32PageSize,1);
+
 
 #ifndef PVRSRV_UNMAP_ON_SPARSE_CHANGE
 			/*
-			 * Still need to map pages incase remap flag is set
-			 * Thats not done for now until the remap case succeeds
+			 * Still need to map pages in case remap flag is set
+			 * That is not done until the remap case succeeds
 			 */
 #endif
 		}
 		eError = PVRSRV_OK;
 	}
 
-#if defined(PVR_MMAP_USE_VM_INSERT)
 	if((psVMA->vm_flags & VM_MIXEDMAP) || bIsLMA)
 	{
 		psVMA->vm_flags |=  VM_MIXEDMAP;
 		bMixedMap = IMG_TRUE;
-	}else{
+	}
+	else
+	{
 		if(ui32AllocPageCount && (NULL != pai32AllocIndices))
 		{
 			for(ui32Loop = 0; ui32Loop < ui32AllocPageCount; ui32Loop++)
@@ -2392,7 +2441,6 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 			}
 		}
 	}
-#endif
 
 	/*Map the pages that got allocated */
 	if(ui32AllocPageCount && (NULL != pai32AllocIndices))
@@ -2400,18 +2448,8 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 		for(ui32Loop = 0; ui32Loop < ui32AllocPageCount; ui32Loop++)
 		{
 			uiCPUVirtAddr = (uintptr_t)(sCpuVAddrBase+(pai32AllocIndices[ui32Loop] * ui32PageSize));
-#if defined(PVR_MMAP_USE_VM_INSERT)
+
 			unmap_mapping_range(mapping,uiCPUVirtAddr,ui32PageSize, 1);
-#else
-			eError = zap_vma_ptes(psVMA, uiCPUVirtAddr, ui32PageSize);
-			if(0 != eError)
-			{
-				PVR_DPF((PVR_DBG_MESSAGE,"%s: Unmapping of the Alloc pages failed, CPUAddr: 0x%16llx ErrorCode: %d",__func__, \
-						uiCPUVirtAddr,eError));
-				eError = PVRSRV_ERROR_PMR_CPU_PAGE_UNMAP_FAILED;
-				goto eFailed;
-			}
-#endif
 			if(bIsLMA)
 			{
 				uiPFN = sCpuPAHeapBase+((IMG_DEV_PHYADDR *)psPageArray)[pai32AllocIndices[ui32Loop]].uiAddr;
@@ -2422,16 +2460,14 @@ PVRSRV_ERROR OSChangeSparseMemCPUAddrMap(void **psPageArray,
 				uiPFN = page_to_pfn((struct page *)psPageArray[pai32AllocIndices[ui32Loop]]);
 			}
 
-#if defined(PVR_MMAP_USE_VM_INSERT)
 			if(bMixedMap )
 			{
 				eError = vm_insert_mixed(psVMA,uiCPUVirtAddr, uiPFN);
-			}else{
+			}
+			else
+			{
 				eError = vm_insert_page(psVMA,uiCPUVirtAddr,page);
 			}
-#else
-			eError = remap_pfn_range(psVMA,uiCPUVirtAddr,uiPFN,ui32PageSize,psVMA->vm_page_prot);
-#endif
 
 			if(0 != eError)
 			{

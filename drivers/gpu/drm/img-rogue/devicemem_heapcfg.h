@@ -49,9 +49,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 
-/* FIXME: Find a better way of defining _PVRSRV_DEVICE_NODE_ */
 struct _PVRSRV_DEVICE_NODE_;
-/* FIXME: Find a better way of defining _CONNECTION_DATA_ */
 struct _CONNECTION_DATA_;
 
 
@@ -98,6 +96,10 @@ typedef struct _DEVMEM_HEAP_BLUEPRINT_
        specified as the log 2 relative to 1 byte (e.g. 12 indicates
        4kB) */
     IMG_UINT32 uiLog2DataPageSize;
+
+    /* Import alignment.  Force imports to this heap to be
+       aligned to at least this value */
+    IMG_UINT32 uiLog2ImportAlignment;
 } DEVMEM_HEAP_BLUEPRINT;
 
 /* entire named heap config */
@@ -144,7 +146,8 @@ HeapCfgHeapDetails(struct _CONNECTION_DATA_ * psConnection,
     IMG_CHAR *pszHeapNameOut,
     IMG_DEV_VIRTADDR *psDevVAddrBaseOut,
     IMG_DEVMEM_SIZE_T *puiHeapLengthOut,
-    IMG_UINT32 *puiLog2DataPageSizeOut
+    IMG_UINT32 *puiLog2DataPageSizeOut,
+    IMG_UINT32 *puiLog2ImportAlignmentOut
 );
 
 #endif

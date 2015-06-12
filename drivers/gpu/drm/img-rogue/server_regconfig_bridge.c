@@ -199,6 +199,7 @@ PVRSRVBridgeRGXDisableRegConfig(IMG_UINT32 ui32DispatchTableEntry,
  * Server bridge dispatch related glue 
  */
 
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitREGCONFIGBridge(void);
 PVRSRV_ERROR DeinitREGCONFIGBridge(void);
@@ -210,24 +211,19 @@ PVRSRV_ERROR InitREGCONFIGBridge(void)
 {
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_REGCONFIG, PVRSRV_BRIDGE_REGCONFIG_RGXSETREGCONFIGTYPE, PVRSRVBridgeRGXSetRegConfigType,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_REGCONFIG, PVRSRV_BRIDGE_REGCONFIG_RGXADDREGCONFIG, PVRSRVBridgeRGXAddRegconfig,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_REGCONFIG, PVRSRV_BRIDGE_REGCONFIG_RGXCLEARREGCONFIG, PVRSRVBridgeRGXClearRegConfig,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_REGCONFIG, PVRSRV_BRIDGE_REGCONFIG_RGXENABLEREGCONFIG, PVRSRVBridgeRGXEnableRegConfig,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_REGCONFIG, PVRSRV_BRIDGE_REGCONFIG_RGXDISABLEREGCONFIG, PVRSRVBridgeRGXDisableRegConfig,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;

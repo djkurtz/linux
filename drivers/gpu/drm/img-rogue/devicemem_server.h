@@ -297,6 +297,38 @@ DevmemIntMapPMR(DEVMEMINT_HEAP *psDevmemHeap,
 extern PVRSRV_ERROR
 DevmemIntUnmapPMR(DEVMEMINT_MAPPING *psMapping);
 
+/* DevmemIntMapPages()
+ *
+ * Maps an arbitrary amount of pages from a PMR to a reserved range
+ *
+ * @input         psReservation      Reservation handle for the range
+ * @input         psPMR              PMR that is mapped
+ * @input         ui32PageCount      Number of consecutive pages that are mapped
+ * @input         uiPhysicalOffset   Logical offset in the PMR
+ * @input         uiFlags            Mapping flags
+ * @input         sDevVAddrBase      Virtual address base to start the mapping from
+ */
+extern PVRSRV_ERROR
+DevmemIntMapPages(DEVMEMINT_RESERVATION *psReservation,
+                  PMR *psPMR,
+                  IMG_UINT32 ui32PageCount,
+                  IMG_UINT32 ui32PhysicalPgOffset,
+                  PVRSRV_MEMALLOCFLAGS_T uiFlags,
+                  IMG_DEV_VIRTADDR sDevVAddrBase);
+
+/* DevmemIntUnmapPages()
+ *
+ * Unmaps an arbitrary amount of pages from a reserved range
+ *
+ * @input         psReservation      Reservation handle for the range
+ * @input         sDevVAddrBase      Virtual address base to start from
+ * @input         ui32PageCount      Number of consecutive pages that are unmapped
+  */
+extern PVRSRV_ERROR
+DevmemIntUnmapPages(DEVMEMINT_RESERVATION *psReservation,
+                    IMG_DEV_VIRTADDR sDevVAddrBase,
+                    IMG_UINT32 ui32PageCount);
+
 /*
  * DevmemIntReserveRange()
  *
@@ -322,6 +354,29 @@ DevmemIntReserveRange(DEVMEMINT_HEAP *psDevmemHeap,
 extern PVRSRV_ERROR
 DevmemIntUnreserveRange(DEVMEMINT_RESERVATION *psDevmemReservation);
 
+/*************************************************************************/ /*!
+@Function       DeviceMemChangeSparseServer
+@Description    Changes the sparse allocations of a PMR by allocating and freeing
+				pages and changing their corresponding CPU and GPU mappings.
+
+@input          psDevmemHeap          Pointer to the heap we map on
+@input          psPMR                 The PMR we want to map
+@input          ui32AllocPageCount    Number of pages to allocate
+@input          pai32AllocIndices     The logical PMR indices where pages will
+                                      be allocated. May be NULL.
+@input          ui32FreePageCount     Number of pages to free
+@input          pai32FreeIndices      The logical PMR indices where pages will
+                                      be freed. May be NULL.
+@input          uiSparseFlags         Flags passed in to determine which kind
+                                      of sparse change the user wanted.
+                                      See devicemem_typedefs.h for details.
+@input          uiFlags               The memalloc flags for this virtual range.
+@input          sDevVAddrBase         The base address of the virtual range of
+                                      this sparse allocation.
+@input          sCpuVAddrBase         The CPU base address of this allocation.
+                                      May be 0 if not existing.
+@Return         PVRSRV_ERROR failure code
+*/ /**************************************************************************/
 extern PVRSRV_ERROR
 DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 					PMR *psPMR,
@@ -329,7 +384,8 @@ DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 					IMG_UINT32 *pai32AllocIndices,
 					IMG_UINT32 ui32FreePageCount,
 					IMG_UINT32 *pai32FreeIndices,
-					IMG_UINT32 uiFlags,
+					SPARSE_MEM_RESIZE_FLAGS uiSparseFlags,
+					PVRSRV_MEMALLOCFLAGS_T uiFlags,
 					IMG_DEV_VIRTADDR sDevVAddrBase,
 					IMG_UINT64 sCpuVAddrBase,
 					IMG_UINT32 *pui32Status);
@@ -355,8 +411,6 @@ DevmemIntIsVDevAddrValid(DEVMEMINT_CTX *psDevMemContext,
  * Writes out PDump "SAB" commands with the data found in memory at
  * the given virtual address.
  */
-/* FIXME: uiArraySize shouldn't be here, and is an
-   artefact of the bridging */
 extern PVRSRV_ERROR
 DevmemIntPDumpSaveToFileVirtual(DEVMEMINT_CTX *psDevmemCtx,
                                 IMG_DEV_VIRTADDR sDevAddrStart,

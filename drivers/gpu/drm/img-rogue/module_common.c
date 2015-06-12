@@ -67,6 +67,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_sync.h"
 #endif
 
+#if defined(SUPPORT_BUFFER_SYNC)
+#include "pvr_buffer_sync.h"
+#endif
+
 #if defined(SUPPORT_GPUTRACE_EVENTS)
 #include "pvr_gputrace.h"
 #endif
@@ -77,10 +81,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(SUPPORT_KERNEL_SRVINIT)
 #include "srvinit.h"
-#endif
-
-#if defined(SUPPORT_DRM)
-#include "pvr_linux_fence.h"
 #endif
 
 #if defined(PVRSRV_NEED_PVR_DPF) || defined(DEBUG)
@@ -101,7 +101,20 @@ MODULE_PARM_DESC(gPMRAllocFail, "When number of PMR allocs reaches"
         "means that alloc function will behave normally).");
 #endif /* defined(DEBUG) */
 
-/* Export some symbols that may be needed by other drivers */
+#if defined(PVRSRV_GPUVIRT_GUESTDRV) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL)
+/* 
+ * Kernel symbol clash if re-exported by guest drivers in multi-driver model
+ */
+#else
+/* 
+ * Export some symbols that may be needed by other drivers
+ * 
+ * When support for GPU virtualization is present and the multi-driver
+ * model (multi-drivers in same OS instance) is being used, then only
+ * the hyperv driver is a true device drivers (i.e. is registered with
+ * the kernel to manage the physical device), the other guest drivers
+ * are all modules.
+ */
 EXPORT_SYMBOL(PVRSRVCheckStatus);
 EXPORT_SYMBOL(PVRSRVGetErrorStringKM);
 
@@ -115,9 +128,13 @@ EXPORT_SYMBOL(RGXHWPerfDisableCounters);
 EXPORT_SYMBOL(RGXHWPerfAcquireData);
 EXPORT_SYMBOL(RGXHWPerfReleaseData);
 #endif
+#endif
 
 DEFINE_MUTEX(gPVRSRVLock);
 
+#if defined(PVRSRV_GPUVIRT_GUESTDRV) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL)
+/* Functionality is n/a for guest drivers in multi-driver model */
+#else
 static DEFINE_MUTEX(gsPMMutex);
 static IMG_BOOL bDriverIsSuspended;
 static IMG_BOOL bDriverIsShutdown;
@@ -249,6 +266,7 @@ int PVRSRVDriverResume(struct device *pDevice)
 
 	return res;
 }
+#endif /* defined(PVRSRV_GPUVIRT_GUESTDRV) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL) */
 
 #if defined(SUPPORT_DRM)
 #define PRIVATE_DATA(pFile) (PVR_DRM_FILE_FROM_FILE(pFile)->driver_priv)
@@ -380,12 +398,13 @@ struct file *LinuxFileFromConnection(CONNECTION_DATA *psConnection)
 /*!
 *****************************************************************************
 
- @Function		PVRSRVCommonPrepare
+ @Function		PVRSRVDriverInit
 
- @Description	Do the initialisation we have to do before anything else
+ @Description	Do the driver-specific initialisation (as opposed to
+              the device-specific initialisation.)
 
 *****************************************************************************/
-int PVRSRVCommonPrepare(void)
+int PVRSRVDriverInit(void)
 {
 	int error = 0;
 
@@ -407,15 +426,6 @@ int PVRSRVCommonPrepare(void)
 		return -ENOMEM;
 	}
 
-#if defined(SUPPORT_DRM) && !defined(SUPPORT_DRM_EXT)
-	error = pvr_linux_fence_init();
-	if (error != 0)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "PVRSRVCommonPrepare: unable to initialise Linux fence support (%d)", error));
-		return -EBUSY;
-	}
-#endif
-
 	LinuxBridgeInit();
 
 	return 0;
@@ -424,18 +434,14 @@ int PVRSRVCommonPrepare(void)
 /*!
 *****************************************************************************
 
- @Function		PVRSRVCommonCleanup
+ @Function		PVRSRVDriverDeinit
 
- @Description	Unwind PVRSRVCommonPrepare
+ @Description	Unwind PVRSRVDriverInit
 
 *****************************************************************************/
-void PVRSRVCommonCleanup(void)
+void PVRSRVDriverDeinit(void)
 {
 	LinuxBridgeDeInit();
-
-#if defined(SUPPORT_DRM) && !defined(SUPPORT_DRM_EXT)
-	pvr_linux_fence_deinit();
-#endif
 
 	PVROSFuncDeInit();
 
@@ -448,12 +454,12 @@ void PVRSRVCommonCleanup(void)
 /*!
 *****************************************************************************
 
- @Function		PVRSRVCommonInit
+ @Function		PVRSRVDeviceInit
 
  @Description	Do the initialisation we have to do after registering the device
 
 *****************************************************************************/
-int PVRSRVCommonInit(void)
+int PVRSRVDeviceInit(void)
 {
 	int error = 0;
 
@@ -465,6 +471,17 @@ int PVRSRVCommonInit(void)
 			PVR_DPF((PVR_DBG_ERROR, "PVRCore_Init: unable to create sync (%d)", eError));
 			return -EBUSY;
 		}
+	}
+#endif
+
+#if defined(SUPPORT_BUFFER_SYNC)
+	error = pvr_buffer_sync_init();
+	if (error != 0)
+	{
+		PVR_DPF((PVR_DBG_ERROR,
+			 "%s: unable to initialise buffer_sync support (%d)",
+			 __func__, error));
+		return error;
 	}
 #endif
 
@@ -498,18 +515,22 @@ int PVRSRVCommonInit(void)
 /*!
 *****************************************************************************
 
- @Function		PVRSRVCommonDeinit
+ @Function		PVRSRVDeviceDeinit
 
- @Description	Unwind PVRSRVCommonInit
+ @Description	Unwind PVRSRVDeviceInit
 
 *****************************************************************************/
-void PVRSRVCommonDeinit(void)
+void PVRSRVDeviceDeinit(void)
 {
 #if defined(SUPPORT_GPUTRACE_EVENTS)
 	PVRGpuTraceDeInit();
 #endif
 
 	PVRDebugRemoveDebugFSEntries();
+
+#if defined(SUPPORT_BUFFER_SYNC)
+	pvr_buffer_sync_deinit();
+#endif
 
 #if defined(SUPPORT_NATIVE_FENCE_SYNC)
 	pvr_sync_deinit();

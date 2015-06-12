@@ -234,7 +234,7 @@ HTBLog_exit:
  */
 
 static POS_LOCK pHTBUFFERBridgeLock;
-static IMG_BYTE pbyHTBUFFERBridgeBuffer[76 +  4];
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitHTBUFFERBridge(void);
 PVRSRV_ERROR DeinitHTBUFFERBridge(void);
@@ -247,16 +247,13 @@ PVRSRV_ERROR InitHTBUFFERBridge(void)
 	PVR_LOGR_IF_ERROR(OSLockCreate(&pHTBUFFERBridgeLock, LOCK_TYPE_PASSIVE), "OSLockCreate");
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_HTBUFFER, PVRSRV_BRIDGE_HTBUFFER_HTBCONFIGURE, PVRSRVBridgeHTBConfigure,
-					pHTBUFFERBridgeLock, pbyHTBUFFERBridgeBuffer,
-					76,  4);
+					pHTBUFFERBridgeLock, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_HTBUFFER, PVRSRV_BRIDGE_HTBUFFER_HTBCONTROL, PVRSRVBridgeHTBControl,
-					pHTBUFFERBridgeLock, pbyHTBUFFERBridgeBuffer,
-					76,  4);
+					pHTBUFFERBridgeLock, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_HTBUFFER, PVRSRV_BRIDGE_HTBUFFER_HTBLOG, PVRSRVBridgeHTBLog,
-					pHTBUFFERBridgeLock, pbyHTBUFFERBridgeBuffer,
-					76,  4);
+					pHTBUFFERBridgeLock, bUseLock);
 
 
 	return PVRSRV_OK;

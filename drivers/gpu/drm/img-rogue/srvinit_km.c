@@ -1,6 +1,9 @@
 /*************************************************************************/ /*!
 @File
+@Title          In-kernel services initialisation routines
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Kernel equivalents of UM functions required to load the
+                firmware, but without any UM-only requirements.
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,14 +42,76 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _CACHE_DEFINES_H_
+#include "img_defs.h"
+#include "pvrsrv_error.h"
+#include "power.h"
+#include "pvr_debug.h"
+#include "srvinit.h"
+#include "srvcore.h"
+#include "rgx_options.h"
+#include "pvrsrv.h"
+#include "lists.h"
 
-#define CACHEFLUSH_GENERIC	1
-#define CACHEFLUSH_X86		2
+static void SrvInitDevice_ForEachVaCb(PVRSRV_DEVICE_NODE *psDeviceNode, va_list va)
+{
+	PVRSRV_ERROR *peError = va_arg(va, PVRSRV_ERROR *);
+	PVRSRV_ERROR eError = PVRSRV_OK;
 
-#if CACHEFLUSH_TYPE == 0
-#error Unknown cache flush type, please addd to cache_defines.h
+	switch(psDeviceNode->sDevId.eDeviceType)
+	{
+#if defined(SUPPORT_RGX)
+		case PVRSRV_DEVICE_TYPE_RGX:
+			eError = RGXInit(psDeviceNode);
+			if (eError != PVRSRV_OK)
+			{
+				PVR_DPF((PVR_DBG_ERROR,
+					 "%s: Initialisation of Rogue device failed (%d)", __func__, eError));
+			}
+			break;
 #endif
+		default:
+			break;
+	}
 
-#endif	/* _CACHE_DEFINES_H_ */
+	/* Only record the first error encountered */
+	if (*peError == PVRSRV_OK)
+	{
+		*peError = eError;
+	}
+}
 
+PVRSRV_ERROR SrvInit(void)
+{
+	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
+	PVRSRV_ERROR eError = PVRSRV_OK;
+	PVRSRV_ERROR eRet;
+	IMG_BOOL bInitSuccesful = IMG_FALSE;
+
+	PVRSRVSetInitServerState(PVRSRV_INIT_SERVER_RUNNING, IMG_TRUE);
+
+	List_PVRSRV_DEVICE_NODE_ForEach_va(psPVRSRVData->psDeviceNodeList,
+                                       &SrvInitDevice_ForEachVaCb,
+                                       &eError);
+	if (eError != PVRSRV_OK)
+	{
+		goto cleanup;
+	}
+
+	_ParseHTBAppHints(NULL);
+
+	bInitSuccesful = IMG_TRUE;
+cleanup:
+	eRet = eError;
+
+	eError = PVRSRVInitSrvDisconnectKM(NULL,
+						NULL,
+						bInitSuccesful,
+						(IMG_UINT32)(RGX_BUILD_OPTIONS));
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Services initialisation disconnect failed (%d).", __func__, eError));
+		eRet = eError;
+	}
+
+	return eRet;
+}

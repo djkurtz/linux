@@ -46,10 +46,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if !defined(__LINKAGE_H__)
 #define __LINKAGE_H__
 
-/*
- * FIXME: This is declared here to save creating a new header which should be
- * removed soon anyway as bridge gen should be providing this interface.
- */
 PVRSRV_ERROR LinuxBridgeInit(void);
 PVRSRV_ERROR LinuxBridgeDeInit(void);
 

@@ -54,12 +54,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "allocmem.h"
 #include <asm/atomic.h>
 
+#define OSLockCreateNoStats(phLock, eLockType) ({ \
+	PVRSRV_ERROR e = PVRSRV_ERROR_OUT_OF_MEMORY; \
+	*(phLock) = OSAllocMemNoStats(sizeof(struct mutex)); \
+	if (*(phLock)) { mutex_init(*(phLock)); e = PVRSRV_OK; }; \
+	e;})
 #define OSLockCreate(phLock, eLockType) ({ \
 	PVRSRV_ERROR e = PVRSRV_ERROR_OUT_OF_MEMORY; \
 	*(phLock) = OSAllocMem(sizeof(struct mutex)); \
 	if (*(phLock)) { mutex_init(*(phLock)); e = PVRSRV_OK; }; \
 	e;})
 #define OSLockDestroy(hLock) ({mutex_destroy((hLock)); OSFreeMem((hLock)); PVRSRV_OK;})
+#define OSLockDestroyNoStats(hLock) ({mutex_destroy((hLock)); OSFreeMemNoStats((hLock)); PVRSRV_OK;})
 
 #define OSLockAcquire(hLock) ({mutex_lock((hLock)); PVRSRV_OK;})
 #define OSLockAcquireNested(hLock, subclass) ({mutex_lock_nested((hLock), (subclass)); PVRSRV_OK;})

@@ -60,9 +60,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "physmem_dmabuf.h"
 #include "hash.h"
 #include "private_data.h"
+#include "module_common.h"
 
 #if defined(SUPPORT_DRM)
-#include <drmP.h>
+#include <drm/drmP.h>
 #endif
 
 #if defined(PVR_RI_DEBUG)
@@ -141,7 +142,7 @@ static PVRSRV_ERROR PMRFinalizeDmaBuf(PMR_IMPL_PRIVDATA pvPriv)
 
 	if (psPrivData->hPDumpAllocInfo)
 	{
-		PDumpPMRFree(psPrivData->hPDumpAllocInfo);
+		PDumpFree(psPrivData->hPDumpAllocInfo);
 		psPrivData->hPDumpAllocInfo = NULL;
 	}
 
@@ -198,7 +199,6 @@ static PVRSRV_ERROR PMRLockPhysAddressesDmaBuf(PMR_IMPL_PRIVDATA pvPriv,
 	PMR_DMA_BUF_DATA *psPrivData = pvPriv;
 	struct dma_buf_attachment *psAttachment = psPrivData->psAttachment;
 	IMG_DEV_PHYADDR *pasDevPhysAddr = NULL;
-	IMG_CPU_PHYADDR sCpuPhysAddr;
 	IMG_UINT32 ui32PageCount = 0;
 	struct scatterlist *sg;
 	struct sg_table *table;
@@ -245,12 +245,7 @@ static PVRSRV_ERROR PMRLockPhysAddressesDmaBuf(PMR_IMPL_PRIVDATA pvPriv,
 		for (j = 0; j < pvr_sg_length(sg); j += PAGE_SIZE)
 		{
 			/* Pass 2: Get the page data */
-			sCpuPhysAddr.uiAddr = sg_phys(sg) + j;
-
-			PhysHeapCpuPAddrToDevPAddr(psPrivData->psPhysHeap, 
-						   1,
-						   &pasDevPhysAddr[ui32PageCount],
-						   &sCpuPhysAddr);
+			pasDevPhysAddr[ui32PageCount].uiAddr = sg_dma_address(sg) + j;
 			ui32PageCount++;
 		}
 	}
@@ -594,6 +589,20 @@ static PVRSRV_ERROR PhysmemDestroyDmaBuf(PHYS_HEAP *psHeap,
 	return PVRSRV_OK;
 }
 
+struct dma_buf *
+PhysmemGetDmaBuf(PMR *psPMR)
+{
+	PMR_DMA_BUF_DATA *psPrivData;
+
+	psPrivData = PMRGetPrivateDataHack(psPMR, &_sPMRDmaBufFuncTab);
+	if (psPrivData)
+	{
+		return psPrivData->psAttachment->dmabuf;
+	}
+
+	return NULL;
+}
+
 PVRSRV_ERROR
 PhysmemImportDmaBuf(CONNECTION_DATA *psConnection,
 		    PVRSRV_DEVICE_NODE *psDevNode,
@@ -625,8 +634,7 @@ PhysmemImportDmaBuf(CONNECTION_DATA *psConnection,
 	psFilePriv = psFile->private_data;
 	psDev = psFilePriv->minor->dev->dev;
 #else
-	/* Use a fake device */
-	psDev = (void *)0x1;
+	psDev = &gpsPVRLDMDev->dev;
 #endif
 
 	/* Get the buffer handle */

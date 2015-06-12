@@ -62,15 +62,26 @@ PVRSRV_ERROR RIWriteMEMDESCEntryKM(PMR *hPMR,
 					   	   	   	   const IMG_CHAR ai8TextB[RI_MAX_TEXT_LEN+1],
 					   	   	   	   IMG_UINT64 uiOffset,
 					   	   	   	   IMG_UINT64 uiSize,
+					   	   	   	   IMG_UINT64 uiBackedSize,
 					   	   	   	   IMG_BOOL bIsImport,
 					   	   	   	   IMG_BOOL bIsExportable,
 					   	   	   	   RI_HANDLE *phRIHandle);
+
+PVRSRV_ERROR RIWriteProcListEntryKM(IMG_UINT32 ui32TextBSize,
+                                    const IMG_CHAR *psz8TextB,
+                                    IMG_UINT64 ui64Size,
+                                    IMG_UINT64 uiBackedSize,
+                                    IMG_UINT64 ui64DevVAddr,
+                                    RI_HANDLE *phRIHandle);
 
 PVRSRV_ERROR RIUpdateMEMDESCAddrKM(RI_HANDLE hRIHandle,
 								   IMG_DEV_VIRTADDR sVAddr);
 
 PVRSRV_ERROR RIUpdateMEMDESCPinningKM(RI_HANDLE hRIHandle,
 								   IMG_BOOL bIsPinned);
+
+PVRSRV_ERROR RIUpdateMEMDESCBackingKM(RI_HANDLE hRIHandle,
+                                      IMG_INT32 iNumModified);
 
 PVRSRV_ERROR RIDeletePMREntryKM(RI_HANDLE hRIHandle);
 PVRSRV_ERROR RIDeleteMEMDESCEntryKM(RI_HANDLE hRIHandle);

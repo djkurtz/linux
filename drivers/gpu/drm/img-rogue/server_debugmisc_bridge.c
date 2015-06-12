@@ -49,7 +49,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem_server.h"
 #include "debugmisc_server.h"
 #include "pmr.h"
-#include "physmem_osmem.h"
+#include "physmem_tdsecbuf.h"
 
 
 #include "common_debugmisc_bridge.h"
@@ -160,11 +160,12 @@ PVRSRVBridgePhysmemImportSecBuf(IMG_UINT32 ui32DispatchTableEntry,
 
 
 	psPhysmemImportSecBufOUT->eError =
-		PhysmemNewTDSecureBufPMR(psConnection, OSGetDevData(psConnection),
+		PhysmemImportSecBuf(psConnection, OSGetDevData(psConnection),
 					psPhysmemImportSecBufIN->uiSize,
-					psPhysmemImportSecBufIN->ui32Log2PageSize,
 					psPhysmemImportSecBufIN->uiFlags,
-					&psPMRPtrInt);
+					&psPhysmemImportSecBufOUT->ui32Align,
+					&psPMRPtrInt,
+					&psPhysmemImportSecBufOUT->ui64SecBufHandle);
 	/* Exit early if bridged call fails */
 	if(psPhysmemImportSecBufOUT->eError != PVRSRV_OK)
 	{
@@ -205,6 +206,7 @@ PhysmemImportSecBuf_exit:
  * Server bridge dispatch related glue 
  */
 
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitDEBUGMISCBridge(void);
 PVRSRV_ERROR DeinitDEBUGMISCBridge(void);
@@ -216,20 +218,16 @@ PVRSRV_ERROR InitDEBUGMISCBridge(void)
 {
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DEBUGMISC, PVRSRV_BRIDGE_DEBUGMISC_DEBUGMISCSLCSETBYPASSSTATE, PVRSRVBridgeDebugMiscSLCSetBypassState,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DEBUGMISC, PVRSRV_BRIDGE_DEBUGMISC_RGXDEBUGMISCSETFWLOG, PVRSRVBridgeRGXDebugMiscSetFWLog,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DEBUGMISC, PVRSRV_BRIDGE_DEBUGMISC_RGXDEBUGMISCDUMPFREELISTPAGELIST, PVRSRVBridgeRGXDebugMiscDumpFreelistPageList,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DEBUGMISC, PVRSRV_BRIDGE_DEBUGMISC_PHYSMEMIMPORTSECBUF, PVRSRVBridgePhysmemImportSecBuf,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;

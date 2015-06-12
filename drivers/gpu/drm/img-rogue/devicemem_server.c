@@ -53,10 +53,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mmu_common.h"
 #include "pdump_km.h"
 #include "pmr.h"
+#include "physmem.h"
 
 #include "allocmem.h"
 #include "osfunc.h"
 #include "lock.h"
+
+#if defined(SUPPORT_BUFFER_SYNC)
+#include <linux/sched.h>
+#include "pvr_buffer_sync.h"
+#endif
 
 struct _DEVMEMINT_CTX_
 {
@@ -230,13 +236,16 @@ DevmemIntPinValidate(DEVMEMINT_MAPPING *psDevmemMapping, PMR *psPMR)
 		/* If we lost the physical baking we have to map it again because
 		 * the old physical addresses are not valid anymore. */
 		IMG_UINT32 uiFlags;
-		PMR_Flags(psPMR, &uiFlags);
-		eErrorMMU = MMU_MapPMR(psDevmemMapping->psReservation->psDevmemHeap->psDevmemCtx->psMMUContext,
-		                       psDevmemMapping->psReservation->sBase,
-		                       psPMR,
-		                       (psDevmemMapping->uiNumPages * (1 << uiLog2PageSize)),
-		                       uiFlags,
-		                       uiLog2PageSize);
+		uiFlags = PMR_Flags(psPMR);
+
+        eErrorMMU = MMU_MapPages(psDevmemMapping->psReservation->psDevmemHeap->psDevmemCtx->psMMUContext,
+                                 uiFlags,
+                                 psDevmemMapping->psReservation->sBase,
+                                 psPMR,
+                                 0,
+                                 psDevmemMapping->uiNumPages,
+                                 NULL,
+                                 uiLog2PageSize);
 	}
 
 	/* Just overwrite eError if the mappings failed.
@@ -415,6 +424,143 @@ fail_alloc:
     return eError;
 }
 
+static PVRSRV_ERROR DevmemIntAllocDummyPage(DEVMEMINT_HEAP *psDevmemHeap)
+{
+
+	IMG_UINT32 ui32Dummyref = 0;
+	PVRSRV_ERROR eError = PVRSRV_OK;
+	PVRSRV_DEVICE_NODE *psDevNode;
+
+	psDevNode = psDevmemHeap->psDevmemCtx->psDevNode;
+
+	/* We know there will not be 4G number of sparse PMR's */
+	/* Also this function depends on the fact that its called under the global lock &
+	 * pmr lock and thus is safe from being re-entrant */
+	ui32Dummyref = OSAtomicIncrement(&psDevNode->sDummyPage.atRefCounter);
+	if(1 == ui32Dummyref)
+	{
+		IMG_UINT8 u8Value = 0;
+		IMG_BOOL bInitPage = IMG_FALSE;
+		IMG_DEV_PHYADDR	sDevPhysAddr={0};
+
+		/*Acquire the lock */
+		OSLockAcquire(psDevNode->sDummyPage.psDummyPgLock);
+
+#if defined(PVR_DUMMY_PAGE_INIT_VALUE)
+		u8Value = PVR_DUMMY_PAGE_INIT_VALUE;
+		bInitPage = IMG_TRUE;
+#else
+		bInitPage = IMG_FALSE;
+#endif
+
+#if defined(PDUMP)
+		PDUMPCOMMENT("Alloc Dummy page object");
+#endif
+		/*Allocate the dummy page required for sparse backing */
+		eError = DevPhysMemAlloc(psDevNode,
+				(1 << psDevNode->sDummyPage.ui32Log2DummyPgSize),
+				u8Value,
+				bInitPage,
+#if	defined(PDUMP)
+				psDevNode->pszMMUPxPDumpMemSpaceName,
+				DUMMY_PAGE,
+				&psDevNode->sDummyPage.hPdumpDummyPg,
+#endif
+				&psDevNode->sDummyPage.sDummyPageHandle,
+				&sDevPhysAddr);
+		if(PVRSRV_OK != eError)
+		{
+			OSAtomicDecrement(&psDevNode->sDummyPage.atRefCounter);
+		}
+		else
+		{
+			psDevNode->sDummyPage.ui64DummyPgPhysAddr = sDevPhysAddr.uiAddr;
+		}
+
+		/*Release the lock */
+		OSLockRelease(psDevNode->sDummyPage.psDummyPgLock);
+	}
+	return eError;
+}
+
+static void DevmemIntFreeDummyPage(DEVMEMINT_HEAP *psDevmemHeap)
+{
+	PVRSRV_DEVICE_NODE *psDevNode;
+	IMG_UINT32 ui32Dummyref = 0;
+
+	psDevNode = psDevmemHeap->psDevmemCtx->psDevNode;
+	ui32Dummyref = OSAtomicRead(&psDevNode->sDummyPage.atRefCounter);
+
+	/* For the cases where the dummy page allocation fails due to lack of memory
+	 * The refcount can still be 0 even for a sparse allocation */
+	if(0 != ui32Dummyref)
+	{
+		OSLockAcquire(psDevNode->sDummyPage.psDummyPgLock);
+
+		/* We know there will not be 4G number of sparse PMR's */
+		ui32Dummyref = OSAtomicDecrement(&psDevNode->sDummyPage.atRefCounter);
+
+		if(0 == ui32Dummyref)
+		{
+			PDUMPCOMMENT("Free Dummy page object");
+
+			/* Free the dummy page when refcount reaches zero */
+			DevPhysMemFree(psDevNode,
+#if defined(PDUMP)
+					psDevNode->sDummyPage.hPdumpDummyPg,
+#endif
+					&psDevNode->sDummyPage.sDummyPageHandle);
+
+#if	defined(PDUMP)
+			psDevNode->sDummyPage.hPdumpDummyPg = NULL;
+#endif
+			psDevNode->sDummyPage.ui64DummyPgPhysAddr = MMU_BAD_PHYS_ADDR;
+		}
+
+		OSLockRelease(psDevNode->sDummyPage.psDummyPgLock);
+	}
+
+}
+
+PVRSRV_ERROR
+DevmemIntMapPages(DEVMEMINT_RESERVATION *psReservation,
+                  PMR *psPMR,
+                  IMG_UINT32 ui32PageCount,
+                  IMG_UINT32 ui32PhysicalPgOffset,
+                  PVRSRV_MEMALLOCFLAGS_T uiFlags,
+                  IMG_DEV_VIRTADDR sDevVAddrBase)
+{
+	PVRSRV_ERROR eError;
+
+	eError = MMU_MapPages(psReservation->psDevmemHeap->psDevmemCtx->psMMUContext,
+	                      uiFlags,
+	                      sDevVAddrBase,
+	                      psPMR,
+	                      ui32PhysicalPgOffset,
+	                      ui32PageCount,
+	                      NULL,
+	                      psReservation->psDevmemHeap->uiLog2PageSize);
+
+	return eError;
+}
+
+PVRSRV_ERROR
+DevmemIntUnmapPages(DEVMEMINT_RESERVATION *psReservation,
+                    IMG_DEV_VIRTADDR sDevVAddrBase,
+                    IMG_UINT32 ui32PageCount)
+{
+	/*Unmap the pages and mark them invalid in the MMU PTE */
+	MMU_UnmapPages (psReservation->psDevmemHeap->psDevmemCtx->psMMUContext,
+					0,
+	                sDevVAddrBase,
+	                ui32PageCount,
+	                NULL,
+	                psReservation->psDevmemHeap->uiLog2PageSize,
+	                IMG_FALSE);
+
+	return PVRSRV_OK;
+}
+
 PVRSRV_ERROR
 DevmemIntMapPMR(DEVMEMINT_HEAP *psDevmemHeap,
                 DEVMEMINT_RESERVATION *psReservation,
@@ -431,6 +577,11 @@ DevmemIntMapPMR(DEVMEMINT_HEAP *psDevmemHeap,
     /* and its length */
     IMG_DEVMEM_SIZE_T uiAllocationSize;
     IMG_UINT32 uiLog2Contiguity = psDevmemHeap->uiLog2PageSize;
+    IMG_BOOL bIsSparse = IMG_FALSE, bNeedBacking = IMG_FALSE;
+	PVRSRV_DEVICE_NODE *psDevNode;
+	 PMR_FLAGS_T uiPMRFlags;
+
+	psDevNode = psDevmemHeap->psDevmemCtx->psDevNode;
 
 	/* allocate memory to record the mapping info */
 	psMapping = OSAllocMem(sizeof *psMapping);
@@ -456,16 +607,60 @@ DevmemIntMapPMR(DEVMEMINT_HEAP *psDevmemHeap,
 
     sAllocationDevVAddr = psReservation->sBase;
 
-    /*  N.B.  We pass mapping permission flags to MMU_MapPMR and let
-       it reject the mapping if the permissions on the PMR are not compatible. */
+    /*Check if the PMR that need to be mapped is sparse */
+	bIsSparse = PMR_IsSparse(psPMR);
+	if(bIsSparse)
+	{
+		/*Get the flags*/
+		uiPMRFlags = PMR_Flags(psPMR);
+		bNeedBacking = PVRSRV_IS_SPARSE_DUMMY_BACKING_REQUIRED(uiPMRFlags);
 
-    eError = MMU_MapPMR (psDevmemHeap->psDevmemCtx->psMMUContext,
-                         sAllocationDevVAddr,
-                         psPMR,
-                         ui32NumDevPages << uiLog2Contiguity,
-                         uiMapFlags,
-                         uiLog2Contiguity);
-    PVR_ASSERT(eError == PVRSRV_OK);
+		if(bNeedBacking)
+		{
+			/*Error is logged with in the function if any failures.
+			 * As the allocation fails we need to fail the map request and
+			 * return appropriate error
+			 *
+			 * Wondering if we do dummy allocation first and then physically lock pages later.
+			 * But on further thought failure of dummy allocation has lesser chance than
+			 * failing of physically locking down of the pages.
+			 * Hence we unlock the locked pages if dummy allocation fails. yes this is 
+			 * time consuming but very unlikely to occur */
+			eError = DevmemIntAllocDummyPage(psDevmemHeap);
+			if(PVRSRV_OK != eError)
+			{
+			  	goto e3;
+			}
+		}
+
+        /*  N.B.  We pass mapping permission flags to MMU_MapPages and let
+           it reject the mapping if the permissions on the PMR are not compatible. */
+        eError = MMU_MapPages(psDevmemHeap->psDevmemCtx->psMMUContext,
+                              uiMapFlags,
+                              sAllocationDevVAddr,
+                              psPMR,
+                              0,
+                              ui32NumDevPages,
+                              NULL,
+                              uiLog2Contiguity);
+        if(PVRSRV_OK != eError)
+        {
+            goto e4;
+        }
+    }
+    else
+    {
+        eError = MMU_MapPMRFast(psDevmemHeap->psDevmemCtx->psMMUContext,
+                             sAllocationDevVAddr,
+                             psPMR,
+                             ui32NumDevPages << uiLog2Contiguity,
+                             uiMapFlags,
+                             uiLog2Contiguity);
+        if(PVRSRV_OK != eError)
+        {
+            goto e3;
+        }
+    }
 
     psMapping->psReservation = psReservation;
     psMapping->uiNumPages = ui32NumDevPages;
@@ -478,7 +673,23 @@ DevmemIntMapPMR(DEVMEMINT_HEAP *psDevmemHeap,
     *ppsMappingPtr = psMapping;
 
     return PVRSRV_OK;
-
+ e4:
+ 	 if(bNeedBacking)
+ 	 {
+	 	/*if the mapping failed, the allocated dummy ref count need
+	 	 * to be handled accordingly */
+		 DevmemIntFreeDummyPage(psDevmemHeap);
+	 }
+ e3:
+ 	 {
+		 PVRSRV_ERROR eError1=PVRSRV_OK;
+		 eError1 = PMRUnlockSysPhysAddresses(psPMR);
+		 if(PVRSRV_OK != eError1)
+		 {
+			PVR_DPF ((PVR_DBG_ERROR, "%s: Failed to unlock the physical addresses",__func__));
+		 }
+	  	*ppsMappingPtr = NULL;
+ 	 }
  e2:
 	OSFreeMem(psMapping);
 
@@ -497,18 +708,70 @@ DevmemIntUnmapPMR(DEVMEMINT_MAPPING *psMapping)
     IMG_DEV_VIRTADDR sAllocationDevVAddr;
     /* number of pages (device pages) that allocation spans */
     IMG_UINT32 ui32NumDevPages;
+    IMG_BOOL bIsSparse = IMG_FALSE, bNeedBacking = IMG_FALSE;
+	PVRSRV_DEVICE_NODE *psDevNode;
+	PMR_FLAGS_T uiPMRFlags;
+#if defined(SUPPORT_BUFFER_SYNC)
+	bool bInterruptible = true;
+	unsigned long ulTimeout = MAX_SCHEDULE_TIMEOUT;
+	IMG_INT iErr;
+
+retry:
+	iErr = pvr_buffer_sync_wait(psMapping->psPMR, bInterruptible, ulTimeout);
+	if (iErr)
+	{
+		if (iErr == -ERESTARTSYS)
+		{
+			PVR_DPF((PVR_DBG_MESSAGE, "%s: Buffer sync wait interrupted (retrying)",
+					 __FUNCTION__));
+			bInterruptible = false;
+			ulTimeout = 30 * HZ;
+			goto retry;
+		}
+
+		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to unmap PMR from device (errno=%d)",
+				 __FUNCTION__, iErr));
+		return PVRSRV_ERROR_STILL_MAPPED;
+	}
+#endif
 
     psDevmemHeap = psMapping->psReservation->psDevmemHeap;
+	psDevNode = psDevmemHeap->psDevmemCtx->psDevNode;
 
     ui32NumDevPages = psMapping->uiNumPages;
     sAllocationDevVAddr = psMapping->psReservation->sBase;
 
+    /*Check if the PMR that need to be mapped is sparse */
+  	bIsSparse = PMR_IsSparse(psMapping->psPMR);
 
-    MMU_UnmapPages (psDevmemHeap->psDevmemCtx->psMMUContext,
-                    sAllocationDevVAddr,
-                    ui32NumDevPages,
-                    NULL,
-                    psMapping->psReservation->psDevmemHeap->uiLog2PageSize);
+  	if(bIsSparse)
+  	{
+		/*Get the flags*/
+  		uiPMRFlags = PMR_Flags(psMapping->psPMR);
+		bNeedBacking = PVRSRV_IS_SPARSE_DUMMY_BACKING_REQUIRED(uiPMRFlags);
+
+		if(bNeedBacking)
+		{
+			DevmemIntFreeDummyPage(psDevmemHeap);
+		}
+
+		MMU_UnmapPages (psDevmemHeap->psDevmemCtx->psMMUContext,
+						0,
+						sAllocationDevVAddr,
+						ui32NumDevPages,
+						NULL,
+						psMapping->psReservation->psDevmemHeap->uiLog2PageSize,
+						IMG_FALSE);
+  	}
+    else
+    {
+        MMU_UnmapPMRFast(psDevmemHeap->psDevmemCtx->psMMUContext,
+                        sAllocationDevVAddr,
+                        ui32NumDevPages,
+                        psMapping->psReservation->psDevmemHeap->uiLog2PageSize);
+    }
+
+
 
     eError = PMRUnlockSysPhysAddresses(psMapping->psPMR);
     PVR_ASSERT(eError == PVRSRV_OK);
@@ -544,7 +807,6 @@ DevmemIntReserveRange(DEVMEMINT_HEAP *psDevmemHeap,
 
     psReservation->sBase = sAllocationDevVAddr;
     psReservation->uiLength = uiAllocationSize;
-
 
     eError = MMU_Alloc (psDevmemHeap->psDevmemCtx->psMMUContext,
                         uiAllocationSize,
@@ -584,11 +846,14 @@ DevmemIntReserveRange(DEVMEMINT_HEAP *psDevmemHeap,
 PVRSRV_ERROR
 DevmemIntUnreserveRange(DEVMEMINT_RESERVATION *psReservation)
 {
+	IMG_DEV_VIRTADDR sBase        = psReservation->sBase;
+	IMG_UINT32 uiLength           = psReservation->uiLength;
+	IMG_UINT32 uiLog2DataPageSize = psReservation->psDevmemHeap->uiLog2PageSize;
 
     MMU_Free (psReservation->psDevmemHeap->psDevmemCtx->psMMUContext,
-              psReservation->sBase,
-              psReservation->uiLength,
-              psReservation->psDevmemHeap->uiLog2PageSize);
+              sBase,
+              uiLength,
+              uiLog2DataPageSize);
 
 	_DevmemIntHeapRelease(psReservation->psDevmemHeap);
 	OSFreeMem(psReservation);
@@ -633,12 +898,6 @@ DevmemIntHeapDestroy(
 	return PVRSRV_OK;
 }
 
-/*************************************************************************/ /*!
-@Function       DeviceMemChangeSparseServer
-@Description    Changes the sparse allocations of a PMR by allocating and freeing
-				pages and changing their corresponding CPU and GPU mappings.
-@Return         PVRSRV_ERROR failure code
-*/ /**************************************************************************/
 PVRSRV_ERROR
 DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 					PMR *psPMR,
@@ -646,7 +905,8 @@ DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 					IMG_UINT32 *pai32AllocIndices,
 					IMG_UINT32 ui32FreePageCount,
 					IMG_UINT32 *pai32FreeIndices,
-					IMG_UINT32 uiFlags,
+					SPARSE_MEM_RESIZE_FLAGS uiSparseFlags,
+					PVRSRV_MEMALLOCFLAGS_T uiFlags,
 					IMG_DEV_VIRTADDR sDevVAddrBase,
 					IMG_UINT64 sCpuVAddrBase,
 					IMG_UINT32 *pui32Status)
@@ -675,7 +935,7 @@ DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 	*pui32Status = PVRSRV_OK;
 
 	{
-		if(uiFlags & (SPARSE_REMAP_MEM | SPARSE_RESIZE_BOTH))
+		if(uiSparseFlags & (SPARSE_REMAP_MEM | SPARSE_RESIZE_BOTH))
 		{
 			/*
 			 * Do the PMR specific changes first
@@ -685,7 +945,7 @@ DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 					pai32AllocIndices,
 					ui32FreePageCount,
 					pai32FreeIndices,
-					uiFlags,
+					uiSparseFlags,
 					pui32Status);
 			if(PVRSRV_OK != eError)
 			{
@@ -697,29 +957,38 @@ DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 			 * Dewire the page table entries for the free pages
 			 * Optimization later would be not to touch the ones that gets re-mapped
 			 */
-			if(0 != ui32FreePageCount)
+			if((0 != ui32FreePageCount) && (uiSparseFlags & SPARSE_RESIZE_FREE))
 			{
-				if(SPARSE_REMAP_MEM != (uiFlags & SPARSE_REMAP_MEM))
+				PMR_FLAGS_T uiPMRFlags;
+				IMG_BOOL bNeedBacking = IMG_FALSE;
+				/*Get the flags*/
+				uiPMRFlags = PMR_Flags(psPMR);
+				bNeedBacking = PVRSRV_IS_SPARSE_DUMMY_BACKING_REQUIRED(uiPMRFlags);
+
+				if(SPARSE_REMAP_MEM != (uiSparseFlags & SPARSE_REMAP_MEM))
 				{
 					/*Unmap the pages and mark them invalid in the MMU PTE */
 					MMU_UnmapPages (psDevmemHeap->psDevmemCtx->psMMUContext,
+							uiFlags,
 							sDevVAddrBase,
 							ui32FreePageCount,
 							pai32FreeIndices,
-							uiLog2PageSize);
-
+							uiLog2PageSize,
+							bNeedBacking);
 				}
 			}
 
 			/*
 			 *  Wire the pages tables that got allocated
 			 */
-			if(0 != ui32AllocPageCount)
+			if((0 != ui32AllocPageCount) && (uiSparseFlags & SPARSE_RESIZE_ALLOC))
 			{
 				/*Map the pages and mark them Valid in the MMU PTE */
 				eError = MMU_MapPages (psDevmemHeap->psDevmemCtx->psMMUContext,
+						uiFlags,
 						sDevVAddrBase,
 						psPMR,
+						0,
 						ui32AllocPageCount,
 						pai32AllocIndices,
 						uiLog2PageSize);
@@ -732,11 +1001,13 @@ DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 			}
 			
 			/*Should this be a debug feature or ever used in real scenario */
-			if(SPARSE_REMAP_MEM == (uiFlags & SPARSE_REMAP_MEM))
+			if(SPARSE_REMAP_MEM == (uiSparseFlags & SPARSE_REMAP_MEM))
 			{
 				eError = MMU_MapPages (psDevmemHeap->psDevmemCtx->psMMUContext,
+						uiFlags,
 						sDevVAddrBase,
 						psPMR,
+						0,
 						ui32AllocPageCount,
 						pai32FreeIndices,
 						uiLog2PageSize);
@@ -754,7 +1025,7 @@ DeviceMemChangeSparseServer(DEVMEMINT_HEAP *psDevmemHeap,
 	 * Do the changes in sparse on to the CPU virtual map accordingly
 	 */
 
-	if(uiFlags & SPARSE_MAP_CPU_ADDR)
+	if(uiSparseFlags & SPARSE_MAP_CPU_ADDR)
 	{
 		if(sCpuVAddrBase != 0)
 		{

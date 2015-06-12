@@ -123,7 +123,7 @@ PVRSRV_ERROR _DevmemMemDescAlloc(DEVMEM_MEMDESC **ppsMemDesc)
 	}
 	
 	/* Structure must be zero'd incase it needs to be freed before it is initialised! */
-	OSMemSet(psMemDesc, 0, sizeof(DEVMEM_MEMDESC));
+	OSCachedMemSet(psMemDesc, 0, sizeof(DEVMEM_MEMDESC));
 
 	eError = OSLockCreate(&psMemDesc->hLock, LOCK_TYPE_PASSIVE);
 	if (eError != PVRSRV_OK)
@@ -250,34 +250,28 @@ PVRSRV_ERROR _DevmemValidateParams(IMG_DEVMEM_SIZE_T uiSize,
 								   IMG_DEVMEM_ALIGN_T uiAlign,
 								   DEVMEM_FLAGS_T uiFlags)
 {
-    if (!(uiFlags & PVRSRV_MEMALLOCFLAG_GPU_READABLE))
-    {
-        /* Don't support memory not GPU readable currently */
-        return PVRSRV_ERROR_INVALID_PARAMS;
-    }
-
     if ((uiFlags & PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC) &&
         (uiFlags & PVRSRV_MEMALLOCFLAG_POISON_ON_ALLOC))
     {
-        /* Zero on Alloc and Poison on Alloc are mutually exclusive */
+		PVR_DPF((PVR_DBG_ERROR,
+		         "%s: Zero on Alloc and Poison on Alloc are mutually exclusive.",
+		         __FUNCTION__));
         return PVRSRV_ERROR_INVALID_PARAMS;
     }
 
     if (uiAlign & (uiAlign-1))
     {
+		PVR_DPF((PVR_DBG_ERROR,
+		         "%s: The requested alignment is not a power of two.",
+		         __FUNCTION__));
         return PVRSRV_ERROR_INVALID_PARAMS;
     }
 
-    /* Verify that size is a positive integer multiple of alignment */
-#if 0 // FIXME
-    if (uiSize & (uiAlign-1))
-    {
-        /* Size not a multiple of alignment */
-        return PVRSRV_ERROR_INVALID_PARAMS;
-    }
-#endif
     if (uiSize == 0)
     {
+		PVR_DPF((PVR_DBG_ERROR,
+		         "%s: Please request a non-zero size value.",
+		         __FUNCTION__));
         return PVRSRV_ERROR_INVALID_PARAMS;
     }
 
@@ -394,6 +388,11 @@ PVRSRV_ERROR _DevmemImportStructDevMap(DEVMEM_HEAP *psHeap,
     IMG_DEV_VIRTADDR sBase;
     IMG_HANDLE hReservation;
     PVRSRV_ERROR eError;
+	IMG_UINT uiAlign;
+
+	/* Round the provided import alignment to the configured heap alignment */
+	uiAlign = 1ULL << psHeap->uiLog2ImportAlignment;
+	uiAlign = (psImport->uiAlign + uiAlign - 1) & ~(uiAlign-1);
 
 	psDeviceImport = &psImport->sDeviceImport;
 
@@ -410,21 +409,11 @@ PVRSRV_ERROR _DevmemImportStructDevMap(DEVMEM_HEAP *psHeap,
 
 		OSAtomicIncrement(&psHeap->hImportCount);
 
-		if (psHeap->psCtx->hDevConnection != psImport->hDevConnection)
-		{
-			/*
-				The import was done with a different connection then the
-				memory context which means they are not compatible.
-			*/
-			eError = PVRSRV_ERROR_INVALID_PARAMS;
-			goto failCheck;
-		}
-
 		/* Allocate space in the VM */
 	    bStatus = RA_Alloc(psHeap->psQuantizedVMRA,
 	                       psImport->uiSize,
 	                       0, /* flags: this RA doesn't use flags*/
-	                       psImport->uiAlign,
+	                       uiAlign,
 	                       &uiAllocatedAddr,
 	                       &uiAllocatedSize,
 	                       NULL /* don't care about per-import priv data */
@@ -500,7 +489,6 @@ failReserve:
 	RA_Free(psHeap->psQuantizedVMRA,
             uiAllocatedAddr);
 failVMRAAlloc:
-failCheck:
 	_DevmemImportStructRelease(psImport);
 	OSAtomicDecrement(&psHeap->hImportCount);
 failParams:
@@ -630,11 +618,6 @@ void _DevmemImportStructCPUUnmap(DEVMEM_IMPORT *psImport)
 
 	if (--psCPUImport->ui32RefCount == 0)
 	{
-		/* FIXME: psImport->uiSize is a 64-bit quantity where as the 5th
-		 * argument to OSUnmapPMR is a 32-bit quantity on 32-bit systems
-		 * hence a compiler warning of implicit cast and loss of data.
-		 * Added explicit cast and assert to remove warning.
-		 */
 #if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
 		PVR_ASSERT(psImport->uiSize<IMG_UINT32_MAX);
 #endif

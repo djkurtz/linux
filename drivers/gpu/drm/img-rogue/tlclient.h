@@ -47,7 +47,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "img_defs.h"
 #include "pvrsrv_error.h"
-#include "services.h"
 
 #include "pvr_tlcommon.h"
 

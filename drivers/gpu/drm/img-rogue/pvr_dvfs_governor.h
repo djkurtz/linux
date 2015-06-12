@@ -1,8 +1,8 @@
 /*************************************************************************/ /*!
 @File
-@Title          PowerVR Linux fence interface
+@Title          PowerVR devfreq governor implementation
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    drm module
+@Description    Linux module setup
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -41,23 +41,60 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#if !defined(__PVR_LINUX_FENCE_H__)
-#define __PVR_LINUX_FENCE_H__
+#ifndef _PVR_DVFS_GOVERNOR_H_
+#define _PVR_DVFS_GOVERNOR_H_
 
-#include <linux/reservation.h>
+#include "syscommon.h"
+#include <linux/devfreq.h>
 
-#include "img_types.h"
+PVRSRV_ERROR InitGovernor(PVRSRV_DATA *psPVRSRVData);
 
-typedef	struct _LINUX_FENCE_CONTEXT_	LINUX_FENCE_CONTEXT;	
-typedef struct _SERVER_SYNC_PRIMITIVE_	SERVER_SYNC_PRIMITIVE;
+PVRSRV_ERROR DeinitGovernor(void);
 
-int pvr_linux_create_fence_context(LINUX_FENCE_CONTEXT **psContext, bool shared);
-void pvr_linux_destroy_fence_context(LINUX_FENCE_CONTEXT *psContext);
+#if defined(PVR_POWER_ACTOR)
+PVRSRV_ERROR InitPowerActor(void);
 
-int pvr_linux_fence_attach(LINUX_FENCE_CONTEXT *psContext, SERVER_SYNC_PRIMITIVE *psSync, struct reservation_object *resv);
-int pvr_linux_fence_create(LINUX_FENCE_CONTEXT *psContext, SERVER_SYNC_PRIMITIVE *psSync);
+PVRSRV_ERROR DeinitPowerActor(void);
+#endif
 
-int pvr_linux_fence_init(void);
-void pvr_linux_fence_deinit(void);
+/* Devfreq events */
+#define DEVFREQ_GOV_START			0x1
+#define DEVFREQ_GOV_STOP			0x2
+#define DEVFREQ_GOV_INTERVAL			0x3
+#define DEVFREQ_GOV_SUSPEND			0x4
+#define DEVFREQ_GOV_RESUME			0x5
 
-#endif /* !defined(__PVR_LINUX_FENCE_H__) */
+/**
+ * struct devfreq_simple_ondemand_data - void *data fed to struct devfreq
+ *	and devfreq_add_device
+ * @upthreshold:	If the load is over this value, the frequency jumps.
+ *			Specify 0 to use the default. Valid value = 0 to 100.
+ * @downdifferential:	If the load is under upthreshold - downdifferential,
+ *			the governor may consider slowing the frequency down.
+ *			Specify 0 to use the default. Valid value = 0 to 100.
+ *			downdifferential < upthreshold must hold.
+ *
+ * If the fed devfreq_simple_ondemand_data pointer is NULL to the governor,
+ * the governor uses the default values.
+ */
+struct devfreq_img_governor_data {
+	unsigned int upthreshold;
+	unsigned int downdifferential;
+};
+
+extern struct devfreq_governor devfreq_img_governor;
+
+/* Caution: devfreq->lock must be locked before calling update_devfreq */
+extern int update_devfreq(struct devfreq *devfreq);
+
+extern void devfreq_monitor_start(struct devfreq *devfreq);
+extern void devfreq_monitor_stop(struct devfreq *devfreq);
+extern void devfreq_monitor_suspend(struct devfreq *devfreq);
+extern void devfreq_monitor_resume(struct devfreq *devfreq);
+extern void devfreq_interval_update(struct devfreq *devfreq,
+					unsigned int *delay);
+
+extern int devfreq_add_governor(struct devfreq_governor *governor);
+extern int devfreq_remove_governor(struct devfreq_governor *governor);
+
+#endif /* _PVR_DVFS_GOVERNOR_H_ */

@@ -224,6 +224,7 @@ add for new DDK 1.1.2550513
 	/* Device's physical heap IDs */
 	gsDevices[0].aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL] = 0;
 	gsDevices[0].aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL] = 0;
+	gsDevices[0].aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_FW_LOCAL] = 0;
 
 	/*  power management on  HW system */
 	#if MTK_PM_SUPPORT
@@ -335,6 +336,11 @@ PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig,
 	PVR_UNREFERENCED_PARAMETER(pfnDumpDebugPrintf);
 
 	return PVRSRV_OK;
+}
+
+SYS_PHYS_ADDRESS_MASK SysDevicePhysAddressMask(void)
+{
+	return SYS_PHYS_ADDRESS_64_BIT;
 }
 
 /******************************************************************************

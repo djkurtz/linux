@@ -353,6 +353,7 @@ DevmemIntCtxImport_exit:
  * Server bridge dispatch related glue 
  */
 
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitCMMBridge(void);
 PVRSRV_ERROR DeinitCMMBridge(void);
@@ -364,16 +365,13 @@ PVRSRV_ERROR InitCMMBridge(void)
 {
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_CMM, PVRSRV_BRIDGE_CMM_DEVMEMINTCTXEXPORT, PVRSRVBridgeDevmemIntCtxExport,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_CMM, PVRSRV_BRIDGE_CMM_DEVMEMINTCTXUNEXPORT, PVRSRVBridgeDevmemIntCtxUnexport,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_CMM, PVRSRV_BRIDGE_CMM_DEVMEMINTCTXIMPORT, PVRSRVBridgeDevmemIntCtxImport,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;

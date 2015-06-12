@@ -65,6 +65,9 @@ PhysmemCreateNewDmaBufBackedPMR(PHYS_HEAP *psHeap,
 				PMR **ppsPMRPtr);
 
 #if defined(SUPPORT_DMABUF)
+struct dma_buf *
+PhysmemGetDmaBuf(PMR *psPMR);
+
 PVRSRV_ERROR
 PhysmemImportDmaBuf(CONNECTION_DATA *psConnection,
 		    PVRSRV_DEVICE_NODE *psDevNode,

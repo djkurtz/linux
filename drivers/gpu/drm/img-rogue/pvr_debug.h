@@ -275,6 +275,12 @@ IMG_IMPORT void IMG_CALLCONV PVRSRVDebugAssertFail(const IMG_CHAR *pszFile,
 		MSC_SUPPRESS_4127\
 		} while (0)
 
+	#define PVR_LOGR_IF_NOMEM(_expr, _call) do \
+		{ if (_expr == NULL) { \
+			PVR_DPF((PVR_DBG_ERROR, "%s() failed (PVRSRV_ERROR_OUT_OF_MEMORY) in %s()", _call, __func__)); \
+			return (PVRSRV_ERROR_OUT_OF_MEMORY); }\
+		MSC_SUPPRESS_4127\
+		} while (0)
 
 	#define PVR_LOGR_IF_ERROR(_rc, _call) do \
 		{ if (_rc != PVRSRV_OK) { \
@@ -331,6 +337,8 @@ IMG_IMPORT void IMG_CALLCONV PVRSRVDebugPrintfDumpCCB(void);
 
 	#define PVR_LOG_ERROR(_rc, _call) (void)(_rc)
 	#define PVR_LOG_IF_ERROR(_rc, _call) (void)(_rc)
+
+	#define PVR_LOGR_IF_NOMEM(_expr, _call) do { if (_expr == NULL) { return (PVRSRV_ERROR_OUT_OF_MEMORY); } MSC_SUPPRESS_4127 } while (0)
 	#define PVR_LOGR_IF_ERROR(_rc, _call) do { if (_rc != PVRSRV_OK) { return (_rc); } MSC_SUPPRESS_4127 } while(0)
 	#define PVR_LOGRN_IF_ERROR(_rc, _call) do { if (_rc != PVRSRV_OK) { return; } MSC_SUPPRESS_4127 } while(0)
 	#define PVR_LOGG_IF_ERROR(_rc, _call, _go) do { if (_rc != PVRSRV_OK) { goto _go; } MSC_SUPPRESS_4127 } while(0)

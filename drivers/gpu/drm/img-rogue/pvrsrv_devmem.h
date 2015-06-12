@@ -55,8 +55,8 @@ extern "C" {
 #include "pdumpdefs.h"
 #include "pvrsrv_error.h"
 #include "pvrsrv_memallocflags.h"
-#include "services.h"	/* For PVRSRV_DEV_DATA */
 #include "sync_external.h"
+#include "services_km.h" /* for PVRSRV_DEV_CONNECTION */
 
 struct _PVRSRV_DEVMEMCTX_;
 
@@ -435,7 +435,7 @@ PVRSRVChangeSparseDevMem(PVRSRV_MEMDESC psMemDesc,
 @Return         PVRSRV_OK on success. Otherwise, a PVRSRV_ error code
 */ /***************************************************************************/
 PVRSRV_ERROR
-PVRSRVAllocSparseDevMem2(const PVRSRV_DEV_CONNECTION *psDevConnection,
+PVRSRVAllocSparseDevMem2(const PVRSRV_DEVMEMCTX psDevMemCtx,
 						IMG_DEVMEM_SIZE_T uiSize,
 						IMG_DEVMEM_SIZE_T uiChunkSize,
 						IMG_UINT32 ui32NumPhysChunks,
@@ -476,7 +476,7 @@ PVRSRVAllocSparseDevMem2(const PVRSRV_DEV_CONNECTION *psDevConnection,
 @Return         PVRSRV_OK on success. Otherwise, a PVRSRV_ error code
 */ /***************************************************************************/
 PVRSRV_ERROR
-PVRSRVAllocSparseDevMem(const PVRSRV_DEV_CONNECTION *psDevConnection,
+PVRSRVAllocSparseDevMem(const PVRSRV_DEVMEMCTX psDevMemCtx,
 						IMG_DEVMEM_SIZE_T uiSize,
 						IMG_DEVMEM_SIZE_T uiChunkSize,
 						IMG_UINT32 ui32NumPhysChunks,
@@ -498,6 +498,32 @@ PVRSRVAllocSparseDevMem(const PVRSRV_DEV_CONNECTION *psDevConnection,
 */ /***************************************************************************/
 
 IMG_UINT32 PVRSRVGetLog2PageSize(void);
+
+/**************************************************************************/ /*!
+@Function       PVRSRVGetHeapLog2PageSize
+@Description    Queries the page size of a passed heap.
+
+@Input          hHeap             Heap that is queried
+@Output         puiLog2PageSize   Log2 page size will be returned in this
+
+@Return         PVRSRV_OK on success. Otherwise, a PVRSRV error code
+*/ /***************************************************************************/
+PVRSRV_ERROR
+PVRSRVGetHeapLog2PageSize(PVRSRV_HEAP hHeap, IMG_UINT32* puiLog2PageSize);
+
+/**************************************************************************/ /*!
+@Function       PVRSRVGetHeapLog2ImportAlignment
+@Description    Queries the import alignment of a passed heap.
+
+@Input          hHeap                   Heap that is queried
+@Output         puiLog2ImportAlignment  Log2 import alignment will be
+                                        returned in this
+
+@Return         PVRSRV_OK on success. Otherwise, a PVRSRV error code
+*/ /***************************************************************************/
+PVRSRV_ERROR
+PVRSRVGetHeapLog2ImportAlignment(PVRSRV_HEAP hHeap,
+                                 IMG_UINT32* puiLog2ImportAlignment);
 
 /**************************************************************************/ /*!
 @Function PVRSRVMakeLocalImportHandle

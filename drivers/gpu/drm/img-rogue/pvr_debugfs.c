@@ -47,7 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_debugfs.h"
 #include "allocmem.h"
 
-#define PVR_DEBUGFS_DIR_NAME "pvr"
+#define PVR_DEBUGFS_DIR_NAME "pvr" PVRSRV_GPUVIRT_OSID_STR
 
 /* Define to set the PVR_DPF debug output level for pvr_debugfs.
  * Normally, leave this set to PVR_DBGDRIV_MESSAGE, but when debugging
@@ -78,14 +78,6 @@ typedef struct _PVR_DEBUGFS_DRIVER_STAT_
 	PVR_DEBUGFS_ENTRY_DATA	*pvDebugFSEntry;
 } PVR_DEBUGFS_DRIVER_STAT;
 
-typedef struct _PVR_DEBUGFS_PRIV_DATA_
-{
-	struct seq_operations	*psReadOps;
-	PVRSRV_ENTRY_WRITE_FUNC	*pfnWrite;
-	void			*pvData;
-	IMG_BOOL		bValid;
-} PVR_DEBUGFS_PRIV_DATA;
-
 typedef struct _PVR_DEBUGFS_DIR_DATA_
 {
 	struct dentry *psDir;
@@ -101,9 +93,19 @@ typedef struct _PVR_DEBUGFS_ENTRY_DATA_
 	PVR_DEBUGFS_DRIVER_STAT *psStatData;
 } PVR_DEBUGFS_ENTRY_DATA;
 
+typedef struct _PVR_DEBUGFS_PRIV_DATA_
+{
+	struct seq_operations	*psReadOps;
+	PVRSRV_ENTRY_WRITE_FUNC	*pfnWrite;
+	void			*pvData;
+	IMG_BOOL		bValid;
+	PVR_DEBUGFS_ENTRY_DATA *psDebugFSEntry;
+} PVR_DEBUGFS_PRIV_DATA;
+
 static void _RefDirEntry(PVR_DEBUGFS_DIR_DATA *psDirEntry);
 static void _UnrefAndMaybeDestroyDirEntry(PVR_DEBUGFS_DIR_DATA *psDirEntry);
 static void _UnrefAndMaybeDestroyDirEntryWhileLocked(PVR_DEBUGFS_DIR_DATA *psDirEntry);
+static IMG_BOOL _RefDebugFSEntry(PVR_DEBUGFS_ENTRY_DATA *psDebugFSEntry);
 static void _UnrefAndMaybeDestroyDebugFSEntry(PVR_DEBUGFS_ENTRY_DATA *psDebugFSEntry);
 static IMG_BOOL _RefStatEntry(PVR_DEBUGFS_DRIVER_STAT *psStatEntry);
 static IMG_BOOL _UnrefAndMaybeDestroyStatEntry(PVR_DEBUGFS_DRIVER_STAT *psStatEntry);
@@ -253,40 +255,63 @@ static int _DebugFSFileOpen(struct inode *psINode, struct file *psFile)
 {
 	PVR_DEBUGFS_PRIV_DATA *psPrivData;
 	int iResult = -EIO;
+	IMG_BOOL bRefRet = IMG_FALSE;
+	PVR_DEBUGFS_ENTRY_DATA *psDebugFSEntry = NULL;
 
 	PVR_ASSERT(psINode);
 	psPrivData = (PVR_DEBUGFS_PRIV_DATA *)psINode->i_private;
-	PVR_ASSERT(psPrivData != NULL);
 
 	if (psPrivData)
 	{
-
 		/* Check that psPrivData is still valid to use */
 		if (psPrivData->bValid)
 		{
+			psDebugFSEntry = psPrivData->psDebugFSEntry;
 
-			iResult = seq_open(psFile, psPrivData->psReadOps);
-			if (iResult == 0)
+			/* Take ref on stat entry before opening seq file - this ref will be dropped if we
+				 * fail to open the seq file or when we close it
+				 */
+			if (psDebugFSEntry)
 			{
-				struct seq_file *psSeqFile = psFile->private_data;
+				bRefRet = _RefDebugFSEntry(psDebugFSEntry);
+				if (bRefRet)
+				{
+					iResult = seq_open(psFile, psPrivData->psReadOps);
+					if (iResult == 0)
+					{
+						struct seq_file *psSeqFile = psFile->private_data;
 
-				psSeqFile->private = psPrivData->pvData;
+						psSeqFile->private = psPrivData->pvData;
+					}
+					else
+					{
+						/* Drop ref if we failed to open seq file */
+						_UnrefAndMaybeDestroyDebugFSEntry(psDebugFSEntry);
+						PVR_DPF((PVR_DBG_ERROR, "%s: Failed to seq_open psFile, returning %d", __FUNCTION__, iResult));
+					}
+				}
 			}
-			else
-			{
-				PVR_DPF((PVR_DEBUGFS_PVR_DPF_LEVEL, "%s: Failed to seq_open psFile, returning %d", __FUNCTION__, iResult));
-			}
-		}
-		else
-		{
-			PVR_DPF((PVR_DEBUGFS_PVR_DPF_LEVEL, "%s: Called for '%s' but psPrivData is not valid, returning -EIO(%d)", __FUNCTION__, psFile->f_path.dentry->d_iname, iResult));
 		}
 	}
-	else
+
+	return iResult;
+}
+
+static int _DebugFSFileClose(struct inode *psINode, struct file *psFile)
+{
+	int iResult;
+	PVR_DEBUGFS_PRIV_DATA *psPrivData = (PVR_DEBUGFS_PRIV_DATA *)psINode->i_private;
+	PVR_DEBUGFS_ENTRY_DATA *psDebugFSEntry = NULL;
+
+	if (psPrivData)
 	{
-		PVR_DPF((PVR_DEBUGFS_PVR_DPF_LEVEL, "%s: psPrivData is NULL, returning -EIO(%d)", __FUNCTION__, iResult));
+		psDebugFSEntry = psPrivData->psDebugFSEntry;
 	}
-
+	iResult = seq_release(psINode, psFile);
+	if (psDebugFSEntry)
+	{
+		_UnrefAndMaybeDestroyDebugFSEntry(psDebugFSEntry);
+	}
 	return iResult;
 }
 
@@ -314,7 +339,7 @@ static const struct file_operations gsPVRDebugFSFileOps =
 	.read = seq_read,
 	.write = _DebugFSFileWrite,
 	.llseek = seq_lseek,
-	.release = seq_release,
+	.release = _DebugFSFileClose,
 };
 
 
@@ -487,6 +512,9 @@ int PVRDebugFSCreateEntry(const char *pszName,
 	psPrivData->pfnWrite = pfnWrite;
 	psPrivData->pvData = (void*)pvData;
 	psPrivData->bValid = IMG_TRUE;
+	/* Store ptr to debugFSEntry in psPrivData, so a ref can be taken on it
+	 * when the client opens a file */
+	psPrivData->psDebugFSEntry = psDebugFSEntry;
 
 	uiMode = S_IFREG;
 
@@ -700,6 +728,26 @@ static void _UnrefAndMaybeDestroyDirEntry(PVR_DEBUGFS_DIR_DATA *psDirEntry)
 	mutex_unlock(&gDebugFSLock);
 }
 
+static IMG_BOOL _RefDebugFSEntry(PVR_DEBUGFS_ENTRY_DATA *psDebugFSEntry)
+{
+	IMG_BOOL bResult = IMG_FALSE;
+
+	PVR_ASSERT(psDebugFSEntry != NULL);
+
+	mutex_lock(&gDebugFSLock);
+
+	bResult = (psDebugFSEntry->ui32RefCount > 0);
+	if (bResult)
+	{
+		/* Increment refCount of psDebugFSEntry */
+		psDebugFSEntry->ui32RefCount++;
+	}
+
+	mutex_unlock(&gDebugFSLock);
+
+	return bResult;
+}
+
 static void _UnrefAndMaybeDestroyDebugFSEntry(PVR_DEBUGFS_ENTRY_DATA *psDebugFSEntry)
 {
 	mutex_lock(&gDebugFSLock);
@@ -720,6 +768,7 @@ static void _UnrefAndMaybeDestroyDebugFSEntry(PVR_DEBUGFS_ENTRY_DATA *psDebugFSE
 					PVR_DEBUGFS_PRIV_DATA *psPrivData = (PVR_DEBUGFS_PRIV_DATA*)psDebugFSEntry->psEntry->d_inode->i_private;
 
 					psPrivData->bValid = IMG_FALSE;
+					psPrivData->psDebugFSEntry = NULL;
 					OSFreeMemNoStats(psEntry->d_inode->i_private);
 				}
 				debugfs_remove(psEntry);

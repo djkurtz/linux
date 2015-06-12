@@ -79,8 +79,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif /* PDUMP */
 
 
-#if defined(SUPPORT_META_SLAVE_BOOT) || defined (INTERNAL_TEST)
-	#define SUPPORT_META_SLAVE_BOOT_SET_OFFSET	OPTIONS_BIT2
+#if defined (INTERNAL_TEST)
+	#define UNUSED_SET_OFFSET	OPTIONS_BIT2
 	#define OPTIONS_BIT2		(0x1ul << 2)
 	#if OPTIONS_BIT2 > RGX_BUILD_OPTIONS_MASK_KM
 	#error "Bit exceeds reserved range"
@@ -175,7 +175,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #else
 	#define OPTIONS_BIT10		0x0
 #endif /* DEBUG */
-
+/* The bit position of this should be the
+ * same as DEBUG_SET_OFFSET option when
+ * defined */
+#define OPTIONS_DEBUG_MASK	(0x1ul << 10)
 
 #define RGX_BUILD_OPTIONS_KM	\
 	OPTIONS_BIT0  |\

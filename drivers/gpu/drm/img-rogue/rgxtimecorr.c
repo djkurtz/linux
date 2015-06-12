@@ -300,8 +300,7 @@ void RGXGPUFreqCalibrateCorrelatePeriodic(IMG_HANDLE hDevHandle)
 	/* Try to acquire the powerlock, if not possible then don't wait */
 	psPVRSRVData     = PVRSRVGetPVRSRVData();
 	if (OSLockIsLocked(psPVRSRVData->hPowerLock)) return; /* Better to not wait here if possible */
-	/* There's a chance that the powerlock could be taken here, it's not that bad even if not desirable
-	   (TODO use OSTryLockAcquire, currently implemented under Linux only) */
+	/* There's a chance that the powerlock could be taken here, it's not that bad even if not desirable */
 	if (PVRSRVPowerLock() != PVRSRV_OK) return;
 
 	/* If the GPU is off then we can't do anything */

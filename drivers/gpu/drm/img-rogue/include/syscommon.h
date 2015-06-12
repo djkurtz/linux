@@ -66,7 +66,7 @@ PVRSRV_ERROR SysReleaseSystemData(IMG_HANDLE hSysData);
 PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig, DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf);
 
 #if defined(SUPPORT_GPUVIRT_VALIDATION)
-#include "services.h"
+#include "services_km.h"
 void SysSetOSidRegisters(IMG_UINT32 aui32OSidMin[GPUVIRT_VALIDATION_NUM_OS][GPUVIRT_VALIDATION_NUM_REGIONS], IMG_UINT32 aui32OSidMax[GPUVIRT_VALIDATION_NUM_OS][GPUVIRT_VALIDATION_NUM_REGIONS]);
 void SysPrintAndResetFaultStatusRegister(void);
 #endif
@@ -79,10 +79,6 @@ PVRSRV_ERROR SysInstallDeviceLISR(IMG_UINT32 ui32IRQ,
 				  IMG_HANDLE *phLISRData);
 
 PVRSRV_ERROR SysUninstallDeviceLISR(IMG_HANDLE hLISRData);
-
-#if defined(SUPPORT_DRM)
-IMG_BOOL SystemISRHandler(void *pvData);
-#endif
 #endif /* defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING) */
 
 
@@ -164,6 +160,29 @@ FORCE_INLINE PVRSRV_ERROR SysCheckMemAllocSize(struct _PVRSRV_DEVICE_NODE_ *psDe
 
 	return PVRSRV_OK;
 }
+
+/* Address mask for the physical device addresses.
+ * Some systems are limited to 32 bit like TC or Emulator because of the
+ * PCI card they are using. */
+typedef enum 
+{
+    SYS_PHYS_ADDRESS_64_BIT = 0xFFFFFFFFFFFFFFFF,
+    SYS_PHYS_ADDRESS_32_BIT = 0xFFFFFFFF
+} SYS_PHYS_ADDRESS_MASK;
+
+/*!
+******************************************************************************
+
+ @Function		SysDevicePhysAddressMask
+
+ @Description	Function to retrieve a mask for the device physical address. 
+                Often PCI cards like the TC or EMU have restrictions on the 
+                maximum address size.
+
+ @Return		The max address value.
+
+******************************************************************************/
+SYS_PHYS_ADDRESS_MASK SysDevicePhysAddressMask(void);
 
 #if defined(__cplusplus)
 }

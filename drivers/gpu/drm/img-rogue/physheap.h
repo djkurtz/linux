@@ -80,9 +80,10 @@ typedef struct _PHYS_HEAP_CONFIG_
 	PHYS_HEAP_TYPE			eType;
 	/*
 		Note:
-		sStartAddr and uiSize are only required for LMA heaps
+		sStartAddr, uiCardBase and uiSize are only required for LMA heaps
 	*/
 	IMG_CPU_PHYADDR			sStartAddr;
+	IMG_UINT64				uiCardBase;
 	IMG_UINT64				uiSize;
 	IMG_CHAR				*pszPDumpMemspaceName;
 	PHYS_HEAP_FUNCTIONS		*psMemFuncs;
@@ -103,6 +104,9 @@ PHYS_HEAP_TYPE PhysHeapGetType(PHYS_HEAP *psPhysHeap);
 
 PVRSRV_ERROR PhysHeapGetAddress(PHYS_HEAP *psPhysHeap,
 								IMG_CPU_PHYADDR *psCpuPAddr);
+
+PVRSRV_ERROR PhysHeapGetBase(PHYS_HEAP *psPhysHeap,
+							IMG_UINT64 *puiBase);
 
 PVRSRV_ERROR PhysHeapGetSize(PHYS_HEAP *psPhysHeap,
 						     IMG_UINT64 *puiSize);

@@ -268,6 +268,12 @@ void PVRSRVConnectionDisconnect(void *pvDataPtr)
 {
 	CONNECTION_DATA *psConnectionData = pvDataPtr;
 
+	/* Notify the PDump core if the pdump control client is disconnecting */
+	if (psConnectionData->ui32ClientFlags & SRV_FLAGS_PDUMPCTRL)
+	{
+		PDumpDisconnectionNotify();
+	}
+
 	/* Defer the release of the connection data */
 	psConnectionData->sCleanupThreadFn.pfnFree = _CleanupThreadPurgeConnectionData;
 	psConnectionData->sCleanupThreadFn.pvData = psConnectionData;

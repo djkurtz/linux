@@ -1,8 +1,8 @@
 /*************************************************************************/ /*!
 @File
-@Title          Client bridge header for ri
+@Title          RGX firmware signature checks
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    Exports the client bridge functions for ri
+@Description    RGX firmware interface structures used by srvinit and server
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -41,48 +41,23 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef CLIENT_RI_BRIDGE_H
-#define CLIENT_RI_BRIDGE_H
+#if !defined (__RGX_FWIF_SIG_KM_H__)
+#define __RGX_FWIF_SIG_KM_H__
 
-#include "pvr_bridge_client.h"
-#include "pvr_bridge.h"
+/************************************************************************
+* RGX FW signature checks
+************************************************************************/
+#define RGXFW_SIG_BUFFER_SIZE_DEFAULT		(1024)
+#if defined(DEBUG) || defined(PDUMP)
+#define RGXFW_SIG_CHECKS_ENABLED_DEFAULT	(IMG_TRUE)
+#else
+#define RGXFW_SIG_CHECKS_ENABLED_DEFAULT	(IMG_FALSE)
+#endif /* DEBUG */
 
-#include "common_ri_bridge.h"
+#endif /*  __RGX_FWIF_SIG_KM_H__ */
 
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIWritePMREntry(IMG_HANDLE hBridge,
-							     IMG_HANDLE hPMRHandle,
-							     IMG_UINT32 ui32TextASize,
-							     const IMG_CHAR *puiTextA,
-							     IMG_UINT64 ui64LogicalSize);
-
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIWriteMEMDESCEntry(IMG_HANDLE hBridge,
-								 IMG_HANDLE hPMRHandle,
-								 IMG_UINT32 ui32TextBSize,
-								 const IMG_CHAR *puiTextB,
-								 IMG_UINT64 ui64Offset,
-								 IMG_UINT64 ui64Size,
-								 IMG_BOOL bIsImport,
-								 IMG_BOOL bIsExportable,
-								 IMG_HANDLE *phRIHandle);
-
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIUpdateMEMDESCAddr(IMG_HANDLE hBridge,
-								 IMG_HANDLE hRIHandle,
-								 IMG_DEV_VIRTADDR sAddr);
-
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIUpdateMEMDESCPinning(IMG_HANDLE hBridge,
-								    IMG_HANDLE hRIHandle,
-								    IMG_BOOL bIsPinned);
-
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIDeleteMEMDESCEntry(IMG_HANDLE hBridge,
-								  IMG_HANDLE hRIHandle);
-
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIDumpList(IMG_HANDLE hBridge,
-							IMG_HANDLE hPMRHandle);
-
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIDumpAll(IMG_HANDLE hBridge);
-
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIDumpProcess(IMG_HANDLE hBridge,
-							   IMG_PID ui32Pid);
+/******************************************************************************
+ End of file (rgx_fwif_sig_km.h)
+******************************************************************************/
 
 
-#endif /* CLIENT_RI_BRIDGE_H */

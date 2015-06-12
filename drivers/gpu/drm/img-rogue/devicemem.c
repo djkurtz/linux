@@ -158,7 +158,7 @@ DeviceMemChangeSparse(DEVMEM_MEMDESC *psMemDesc,
 					  IMG_UINT32 *paui32AllocPageIndices,
 					  IMG_UINT32 ui32FreePageCount,
 					  IMG_UINT32 *pauiFreePageIndices,
-					  SPARSE_MEM_RESIZE_FLAGS uiFlags,
+					  SPARSE_MEM_RESIZE_FLAGS uiSparseFlags,
 					  IMG_UINT32 *pui32Status)
 {
 	PVRSRV_ERROR eError=-1;
@@ -194,13 +194,13 @@ DeviceMemChangeSparse(DEVMEM_MEMDESC *psMemDesc,
 		goto ChangeSparseError;
 	}
 
-	if((uiFlags & SPARSE_RESIZE_BOTH) && (0 == sDevVAddr.uiAddr))
+	if((uiSparseFlags & SPARSE_RESIZE_BOTH) && (0 == sDevVAddr.uiAddr))
 	{
 		PVR_DPF((PVR_DBG_ERROR,"%s: Invalid Device Virtual Map",__func__));
 		goto ChangeSparseError;
 	}
 
-	if((uiFlags & SPARSE_MAP_CPU_ADDR) && (0 == sCpuVAddr))
+	if((uiSparseFlags & SPARSE_MAP_CPU_ADDR) && (0 == sCpuVAddr))
 	{
 		PVR_DPF((PVR_DBG_ERROR,"%s: Invalid CPU Virtual Map",__func__));
 		goto ChangeSparseError;
@@ -217,13 +217,21 @@ DeviceMemChangeSparse(DEVMEM_MEMDESC *psMemDesc,
 										paui32AllocPageIndices,
 										ui32FreePageCount,
 										pauiFreePageIndices,
-										uiFlags,
+										uiSparseFlags,
+										psImport->uiFlags,
 										sDevVAddr,
 										(IMG_UINT64)((uintptr_t)sCpuVAddr),
 										&ui32Status);
 
 	 OSLockRelease(hLock);
 	 *pui32Status = ui32Status;
+
+#if defined(PVR_RI_DEBUG)
+	BridgeRIUpdateMEMDESCBacking(psImport->hDevConnection,
+	                             psMemDesc->hRIHandle,
+	                             ((IMG_INT32) ui32AllocPageCount - (IMG_INT32) ui32FreePageCount)
+	                              * (1 << psImport->sDeviceImport.psHeap->uiLog2Quantum));
+#endif
 
 #ifdef PVRSRV_UNMAP_ON_SPARSE_CHANGE
 	 if((PVRSRV_OK == eError) && (psMemDesc->sCPUMemDesc.ui32RefCount))
@@ -372,6 +380,7 @@ _PopulateContextFromBlueprint(struct _DEVMEM_CONTEXT_ *psCtx,
     IMG_CHAR aszHeapName[DEVMEM_HEAPNAME_MAXLENGTH];
     IMG_DEVMEM_SIZE_T uiHeapLength;
     IMG_DEVMEM_LOG2ALIGN_T uiLog2DataPageSize;
+    IMG_DEVMEM_LOG2ALIGN_T uiLog2ImportAlignment;
 
     eError = DevmemHeapCount(psCtx->hDevConnection,
                              uiHeapBlueprintID,
@@ -406,7 +415,8 @@ _PopulateContextFromBlueprint(struct _DEVMEM_CONTEXT_ *psCtx,
                                    sizeof(aszHeapName),
                                    &sDevVAddrBase,
                                    &uiHeapLength,
-                                   &uiLog2DataPageSize);
+                                   &uiLog2DataPageSize,
+                                   &uiLog2ImportAlignment);
         if (eError != PVRSRV_OK)
         {
             goto e1;
@@ -416,6 +426,7 @@ _PopulateContextFromBlueprint(struct _DEVMEM_CONTEXT_ *psCtx,
                                   sDevVAddrBase,
                                   uiHeapLength,
                                   uiLog2DataPageSize,
+                                  uiLog2ImportAlignment,
                                   aszHeapName,
                                   &ppsHeapArray[uiHeapIndex]);
         if (eError != PVRSRV_OK)
@@ -726,7 +737,8 @@ DevmemHeapDetails(SHARED_DEV_CONNECTION hDevConnection,
                   IMG_UINT32 uiHeapNameBufSz,
                   IMG_DEV_VIRTADDR *psDevVAddrBaseOut,
                   IMG_DEVMEM_SIZE_T *puiHeapLengthOut,
-                  IMG_UINT32 *puiLog2DataPageSizeOut)
+                  IMG_UINT32 *puiLog2DataPageSizeOut,
+                  IMG_UINT32 *puiLog2ImportAlignmentOut)
 {
     PVRSRV_ERROR eError;
 
@@ -737,7 +749,8 @@ DevmemHeapDetails(SHARED_DEV_CONNECTION hDevConnection,
                                       pszHeapNameOut,
                                       psDevVAddrBaseOut,
                                       puiHeapLengthOut,
-                                      puiLog2DataPageSizeOut);
+                                      puiLog2DataPageSizeOut,
+                                      puiLog2ImportAlignmentOut);
 
     VG_MARK_INITIALIZED(pszHeapNameOut,uiHeapNameBufSz);
 
@@ -755,6 +768,7 @@ DevmemCreateHeap(DEVMEM_CONTEXT *psCtx,
                  IMG_DEV_VIRTADDR sBaseAddress,
                  IMG_DEVMEM_SIZE_T uiLength,
                  IMG_UINT32 ui32Log2Quantum,
+                 IMG_UINT32 ui32Log2ImportAlignment,
                  const IMG_CHAR *pszName,
                  DEVMEM_HEAP **ppsHeapPtr)
 {
@@ -820,6 +834,7 @@ DevmemCreateHeap(DEVMEM_CONTEXT *psCtx,
         goto e3;
     }
 
+    psHeap->uiLog2ImportAlignment = ui32Log2ImportAlignment;
     psHeap->uiLog2Quantum = ui32Log2Quantum;
 
     OSSNPrintf(aszBuf, sizeof(aszBuf),
@@ -1105,28 +1120,11 @@ DevmemAllocate(DEVMEM_HEAP *psHeap,
 			goto failZero;
 		}
 
-		/* FIXME: uiSize is a 64-bit quantity whereas the 3rd argument
-		 * to OSMemSet is a 32-bit quantity on 32-bit systems
-		 * hence a compiler warning of implicit cast and loss of data.
-		 * Added explicit cast and assert to remove warning.
-		 */
 #if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
 		PVR_ASSERT(uiSize<IMG_UINT32_MAX);
 #endif
 
-#if defined(CONFIG_ARM64) || defined(__arm64__) || defined(__aarch64__)
-		{
-			IMG_UINT32 i;
-			IMG_BYTE * pbyPtr;
-
-			pbyPtr = (IMG_BYTE*) pvAddr;
-			for (i = 0; i < uiSize; i++)
-				*pbyPtr++ = 0;
-		}
-
-#else
-		OSMemSet(pvAddr, 0x0, (size_t) uiSize);
-#endif
+		OSDeviceMemSet(pvAddr, 0x0, (size_t) uiSize);
 	    
 		DevmemReleaseCpuVirtAddr(psMemDesc);
 
@@ -1150,6 +1148,7 @@ DevmemAllocate(DEVMEM_HEAP *psHeap,
 											OSStringNLength(pszText, RI_MAX_TEXT_LEN),
 											pszText,
 											psMemDesc->uiOffset,
+											uiAllocatedSize,
 											uiAllocatedSize,
 											IMG_FALSE,
 											IMG_FALSE,
@@ -1271,6 +1270,7 @@ DevmemAllocateExportable(SHARED_DEV_CONNECTION hDevConnection,
 											"^",
 											psMemDesc->uiOffset,
 											uiSize,
+											uiSize,
 											IMG_FALSE,
 											IMG_TRUE,
 											&psMemDesc->hRIHandle);
@@ -1384,6 +1384,7 @@ DevmemAllocateSparse(SHARED_DEV_CONNECTION hDevConnection,
 											"^",
 											psMemDesc->uiOffset,
 											uiSize,
+											ui32NumPhysChunks * uiChunkSize,
 											IMG_FALSE,
 											IMG_TRUE,
 											&psMemDesc->hRIHandle);
@@ -1629,6 +1630,7 @@ DevmemImport(SHARED_DEV_CONNECTION hDevConnection,
 											sizeof("^"),
 											"^",
 											psMemDesc->uiOffset,
+											psMemDesc->psImport->uiSize,
 											psMemDesc->psImport->uiSize,
 											IMG_TRUE,
 											IMG_FALSE,
@@ -2224,6 +2226,7 @@ DevmemLocalImport(IMG_HANDLE hBridge,
 											"^",
 											psMemDesc->uiOffset,
 											psMemDesc->psImport->uiSize,
+											psMemDesc->psImport->uiSize,
 											IMG_TRUE,
 											IMG_FALSE,
 											&(psMemDesc->hRIHandle));
@@ -2254,3 +2257,16 @@ DevmemIsDevVirtAddrValid(DEVMEM_CONTEXT *psContext,
                                        psContext->hDevMemServerContext,
                                        sDevVAddr);
 }
+
+IMG_INTERNAL IMG_UINT32
+DevmemGetHeapLog2PageSize(DEVMEM_HEAP *psHeap)
+{
+	return psHeap->uiLog2Quantum;
+}
+
+IMG_INTERNAL IMG_UINT32
+DevmemGetHeapLog2ImportAlignment(DEVMEM_HEAP *psHeap)
+{
+	return psHeap->uiLog2ImportAlignment;
+}
+

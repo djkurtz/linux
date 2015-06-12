@@ -61,6 +61,9 @@ struct _PHYS_HEAP_
 	IMG_CPU_PHYADDR				sStartAddr;
 	/*! Size of the physcial memory heap (LMA only) */
 	IMG_UINT64					uiSize;
+	/*! Heap card base (GPU view of sStartAddr, LMA only) */
+	IMG_UINT64					uiCardBase;
+
 
 	/*! PDump name of this physcial memory heap */
 	IMG_CHAR					*pszPDumpMemspaceName;
@@ -123,6 +126,7 @@ PVRSRV_ERROR PhysHeapRegister(PHYS_HEAP_CONFIG *psConfig,
 	psNew->ui32PhysHeapID = psConfig->ui32PhysHeapID;
 	psNew->eType = psConfig->eType;
 	psNew->sStartAddr = psConfig->sStartAddr;
+	psNew->uiCardBase = psConfig->uiCardBase;
 	psNew->uiSize = psConfig->uiSize;
 	psNew->psMemFuncs = psConfig->psMemFuncs;
 	psNew->hPrivData = psConfig->hPrivData;
@@ -215,6 +219,24 @@ PVRSRV_ERROR PhysHeapGetAddress(PHYS_HEAP *psPhysHeap,
 	if (psPhysHeap->eType == PHYS_HEAP_TYPE_LMA)
 	{
 		*psCpuPAddr = psPhysHeap->sStartAddr;
+		return PVRSRV_OK;
+	}
+
+	return PVRSRV_ERROR_INVALID_PARAMS;
+}
+
+PVRSRV_ERROR PhysHeapGetBase(PHYS_HEAP *psPhysHeap,
+							 IMG_UINT64 *puiBase)
+{
+	if (psPhysHeap->eType == PHYS_HEAP_TYPE_LMA)
+	{
+		IMG_UINT64 uiTmp = 0;
+		if (psPhysHeap->uiCardBase == --uiTmp)
+		{
+			return PVRSRV_ERROR_INVALID_HEAPINFO;
+		}
+
+		*puiBase = psPhysHeap->uiCardBase;
 		return PVRSRV_OK;
 	}
 

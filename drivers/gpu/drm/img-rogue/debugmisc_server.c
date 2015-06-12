@@ -108,7 +108,13 @@ PVRSRVRGXDebugMiscSetFWLogKM(
 		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
 
-	/* set the new log type in shared structure */
+#if defined(PVRSRV_GPUVIRT_GUESTDRV)
+	/* Guest drivers do not support tracebuf */
+	PVR_UNREFERENCED_PARAMETER(psDevInfo);
+	PVR_UNREFERENCED_PARAMETER(sLogTypeUpdateCmd);
+	eError = PVRSRV_ERROR_NOT_IMPLEMENTED;
+#else
+	/* set the new log type */
 	psDevInfo->psRGXFWIfTraceBuf->ui32LogType = ui32RGXFWLogType;
 
 	/* Allocate firmware trace buffer resource(s) if not already done */
@@ -137,18 +143,9 @@ PVRSRVRGXDebugMiscSetFWLogKM(
 			PVR_DPF((PVR_DBG_ERROR,"%s: Waiting for value aborted with error (%u)", __FUNCTION__, eError));
 		}
 	}
+#endif
 
 	return eError;
-}
-
-static IMG_BOOL
-_RGXDumpFreeListPageList(PDLLIST_NODE psNode, void *pvCallbackData)
-{
-	RGX_FREELIST *psFreeList = IMG_CONTAINER_OF(psNode, RGX_FREELIST, sNode);
-
-	RGXDumpFreeListPageList(psFreeList);
-
-	return IMG_TRUE;
 }
 
 IMG_EXPORT PVRSRV_ERROR
@@ -157,6 +154,7 @@ PVRSRVRGXDebugMiscDumpFreelistPageListKM(
 	PVRSRV_DEVICE_NODE *psDeviceNode)
 {
 	PVRSRV_RGXDEV_INFO* psDevInfo = psDeviceNode->pvDevice;
+	DLLIST_NODE *psNode, *psNext;
 
 	PVR_UNREFERENCED_PARAMETER(psConnection);
 	
@@ -168,7 +166,11 @@ PVRSRVRGXDebugMiscDumpFreelistPageListKM(
 	PVR_LOG(("---------------[ Begin Freelist Page List Dump ]------------------"));
 
 	OSLockAcquire(psDevInfo->hLockFreeList);
-	dllist_foreach_node(&psDevInfo->sFreeListHead, _RGXDumpFreeListPageList, NULL);
+	dllist_foreach_node(&psDevInfo->sFreeListHead, psNode, psNext)
+	{
+		RGX_FREELIST *psFreeList = IMG_CONTAINER_OF(psNode, RGX_FREELIST, sNode);
+		RGXDumpFreeListPageList(psFreeList);
+	}
 	OSLockRelease(psDevInfo->hLockFreeList);
 
 	PVR_LOG(("----------------[ End Freelist Page List Dump ]-------------------"));

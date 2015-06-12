@@ -15,6 +15,7 @@ pvrsrvkm-y += \
  server_rgxcmp_bridge.o \
  server_rgxhwperf_bridge.o \
  server_rgxinit_bridge.o \
+ server_rgxkicksync_bridge.o \
  server_rgxta3d_bridge.o \
  server_rgxtq_bridge.o \
  server_smm_bridge.o \
@@ -22,6 +23,8 @@ pvrsrvkm-y += \
  server_sync_bridge.o \
  server_syncsexport_bridge.o \
  server_timerquery_bridge.o \
+ pvr_buffer_sync.o \
+ pvr_fence.o \
  cache_generic.o \
  connection_server.o \
  devicemem_heapcfg.o \
@@ -33,6 +36,7 @@ pvrsrvkm-y += \
  physheap.o \
  physmem.o \
  physmem_lma.o \
+ physmem_tdsecbuf.o \
  pmr.o \
  power.o \
  process_stats.o \
@@ -50,10 +54,13 @@ pvrsrvkm-y += \
  rgxfwutils.o \
  rgxhwperf.o \
  rgxinit.o \
+ rgxkicksync.o \
+ rgxlayer_km_impl.o \
  rgxmem.o \
  rgxmmuinit.o \
  rgxpower.o \
  rgxregconfig.o \
+ rgxstartstop.o \
  rgxsync.o \
  rgxta3d.o \
  rgxtimecorr.o \
@@ -73,19 +80,13 @@ pvrsrvkm-y += \
  pdump.o \
  physmem_dmabuf.o \
  physmem_osmem_linux.o \
- physmem_tdmetacode_linux.o \
- physmem_tdsecbuf_linux.o \
  pmr_os.o \
  pvr_bridge_k.o \
  pvr_debug.o \
  pvr_debugfs.o \
  pvr_drm.o \
- pvr_drm_gem.o \
- pvr_drm_prime.o \
- pvr_linux_fence.o \
  devicemem.o \
  devicemem_utils.o \
- dllist.o \
  hash.o \
  htbuffer.o \
  ra.o \
@@ -96,16 +97,25 @@ pvrsrvkm-y += \
  mt8173/mt8173_mfgdvfs.o \
  mt8173/mt8173_mfgsys.o \
  mt8173/mt8173_sysconfig.o
-ifeq ($(CONFIG_POWERVR_ROGUE_DEBUG),y)
-pvrsrvkm-y += \
+pvrsrvkm-$(CONFIG_DRM_POWERVR_ROGUE_DEBUG) += \
  client_devicememhistory_bridge.o \
  server_devicememhistory_bridge.o \
- client_ri_bridge.o \
- server_ri_bridge.o \
- devicemem_history_server.o \
- ri_server.o
-endif
+ devicemem_history_server.o
+pvrsrvkm-$(CONFIG_DRM_POWERVR_ROGUE_KERNEL_SRVINIT) += \
+ client_rgxinit_bridge.o \
+ rgx_hwperf_table.o \
+ htbinit.o \
+ srvinit_pdump.o \
+ rgxfwload.o \
+ rgxfwimageutils.o \
+ rgxlayer_impl.o \
+ rgxsrvinit.o \
+ rgxsrvinit_script.o \
+ os_srvinit_param.o \
+ srvinit_km.o
+pvrsrvkm-$(CONFIG_DRM_POWERVR_ROGUE_DVFS) += \
+ pvr_dvfs_device.o \
+ pvr_dvfs_governor.o
 pvrsrvkm-$(CONFIG_X86) += osfunc_x86.o
-pvrsrvkm-$(CONFIG_ARM) += osfunc_arm.o
 pvrsrvkm-$(CONFIG_ARM64) += osfunc_arm64.o
 pvrsrvkm-$(CONFIG_EVENT_TRACING) += trace_events.o

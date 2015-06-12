@@ -133,24 +133,6 @@ void RGXDumpFirmwareTrace(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 /*!
 *******************************************************************************
 
- @Function	RGXQueryDMState
-
- @Description
-
- Query DM state
-
- @Input  psDevInfo        - RGX device info
- @Input  eDM              - DM number for which to return status
- @Output peState          - RGXFWIF_DM_STATE
- @Output psComCtxDevVAddr - If DM is locked-up, Firmware address of Firmware Common Context, otherwise NULL
-
- @Return PVRSRV_ERROR
-******************************************************************************/
-PVRSRV_ERROR RGXQueryDMState(PVRSRV_RGXDEV_INFO *psDevInfo, RGXFWIF_DM eDM, RGXFWIF_DM_STATE *peState, RGXFWIF_DEV_VIRTADDR *psComCtxDevVAddr);
-
-/*!
-*******************************************************************************
-
  @Function	RGXReadWithSP
 
  @Description
@@ -162,5 +144,22 @@ PVRSRV_ERROR RGXQueryDMState(PVRSRV_RGXDEV_INFO *psDevInfo, RGXFWIF_DM eDM, RGXF
  @Return IMG_UINT32
 ******************************************************************************/
 IMG_UINT32 RGXReadWithSP(IMG_UINT32 ui32FWAddr);
+
+
+#if defined(SUPPORT_EXTRA_METASP_DEBUG)
+/*!
+*******************************************************************************
+
+ @Function     ValidateFWImageWithSP
+
+ @Description  Compare the Firmware image as seen from the CPU point of view
+               against the same memory area as seen from the META point of view
+
+ @Input        psDevInfo - Device Info
+
+ @Return       PVRSRV_ERROR
+******************************************************************************/
+PVRSRV_ERROR ValidateFWImageWithSP(PVRSRV_RGXDEV_INFO *psDevInfo);
+#endif /* defined(SUPPORT_EXTRA_METASP_DEBUG) */
 
 #endif /* __RGXDEBUG_H__ */

@@ -83,7 +83,6 @@ typedef uint8_t			IMG_UINT8,	*IMG_PUINT8;
 typedef uint8_t			IMG_BYTE,	*IMG_PBYTE;
 typedef int8_t			IMG_INT8,	*IMG_PINT8;
 typedef char			IMG_CHAR,	*IMG_PCHAR;
-typedef IMG_CHAR const				*IMG_PCCHAR;
 
 typedef uint16_t		IMG_UINT16,	*IMG_PUINT16;
 typedef int16_t			IMG_INT16,	*IMG_PINT16;
@@ -108,11 +107,6 @@ typedef int64_t			IMG_INT64,	*IMG_PINT64;
 #define IMG_INT32_MAX	INT32_MAX
 #define IMG_INT64_MAX	INT64_MAX
 
-typedef IMG_UINT16 const* IMG_PCUINT16;
-typedef IMG_INT16 const* IMG_PCINT16;
-typedef IMG_UINT32 const* IMG_PCUINT32;
-typedef IMG_INT32 const* IMG_PCINT32;
-
 /* Linux kernel mode does not use floating point */
 typedef float			IMG_FLOAT,	*IMG_PFLOAT;
 typedef double			IMG_DOUBLE, *IMG_PDOUBLE;
@@ -131,7 +125,6 @@ typedef	enum tag_img_bool
 	IMG_TRUE		= 1,
 	IMG_FORCE_ALIGN = 0x7FFFFFFF
 } IMG_BOOL, *IMG_PBOOL;
-typedef IMG_BOOL const* IMG_PCBOOL;
 
 #if !defined(LINUX)
 typedef void            IMG_VOID, *IMG_PVOID;
@@ -142,6 +135,13 @@ typedef size_t			IMG_SIZE_T;
 
 #define IMG_SIZE_T_MAX	SIZE_MAX
 #define IMG_NULL		NULL
+
+typedef IMG_CHAR const* IMG_PCCHAR;
+typedef IMG_UINT16 const* IMG_PCUINT16;
+typedef IMG_INT16 const* IMG_PCINT16;
+typedef IMG_UINT32 const* IMG_PCUINT32;
+typedef IMG_INT32 const* IMG_PCINT32;
+typedef IMG_BOOL const* IMG_PCBOOL;
 #endif
 
 #if defined(_MSC_VER)
@@ -294,6 +294,19 @@ typedef struct _IMG_RECT_32_
 	IMG_FLOAT	x1;
 	IMG_FLOAT	y1;
 } IMG_RECT_F32, *PIMG_RECT_F32;
+
+/*
+ * box structure
+ */
+typedef struct _IMG_BOX_
+{
+	IMG_INT32	x0;
+	IMG_INT32	y0;
+	IMG_INT32	z0;
+	IMG_INT32	x1;
+	IMG_INT32	y1;
+	IMG_INT32	z1;
+} IMG_BOX, *PIMG_BOX;
 
 #if defined (__cplusplus)
 }

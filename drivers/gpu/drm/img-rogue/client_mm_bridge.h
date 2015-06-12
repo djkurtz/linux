@@ -77,6 +77,38 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRImportPMR(IMG_HANDLE hBridge,
 							  IMG_UINT32 ui32uiLog2Contig,
 							  IMG_HANDLE *phPMR);
 
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRLocalImportPMR(IMG_HANDLE hBridge,
+							       IMG_HANDLE hExtHandle,
+							       IMG_HANDLE *phPMR,
+							       IMG_DEVMEM_SIZE_T *puiSize,
+							       IMG_DEVMEM_ALIGN_T *psAlign);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnrefPMR(IMG_HANDLE hBridge,
+							 IMG_HANDLE hPMR);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnrefUnlockPMR(IMG_HANDLE hBridge,
+							       IMG_HANDLE hPMR);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePhysmemNewRamBackedPMR(IMG_HANDLE hBridge,
+								    IMG_DEVMEM_SIZE_T uiSize,
+								    IMG_DEVMEM_SIZE_T uiChunkSize,
+								    IMG_UINT32 ui32NumPhysChunks,
+								    IMG_UINT32 ui32NumVirtChunks,
+								    IMG_UINT32 *pui32MappingTable,
+								    IMG_UINT32 ui32Log2PageSize,
+								    PVRSRV_MEMALLOCFLAGS_T uiFlags,
+								    IMG_HANDLE *phPMRPtr);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePhysmemNewRamBackedLockedPMR(IMG_HANDLE hBridge,
+									  IMG_DEVMEM_SIZE_T uiSize,
+									  IMG_DEVMEM_SIZE_T uiChunkSize,
+									  IMG_UINT32 ui32NumPhysChunks,
+									  IMG_UINT32 ui32NumVirtChunks,
+									  IMG_UINT32 *pui32MappingTable,
+									  IMG_UINT32 ui32Log2PageSize,
+									  PVRSRV_MEMALLOCFLAGS_T uiFlags,
+									  IMG_HANDLE *phPMRPtr);
+
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntPin(IMG_HANDLE hBridge,
 							  IMG_HANDLE hPMR);
 
@@ -128,16 +160,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntReserveRange(IMG_HANDLE hB
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntUnreserveRange(IMG_HANDLE hBridge,
 								     IMG_HANDLE hReservation);
 
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePhysmemNewRamBackedPMR(IMG_HANDLE hBridge,
-								    IMG_DEVMEM_SIZE_T uiSize,
-								    IMG_DEVMEM_SIZE_T uiChunkSize,
-								    IMG_UINT32 ui32NumPhysChunks,
-								    IMG_UINT32 ui32NumVirtChunks,
-								    IMG_UINT32 *pui32MappingTable,
-								    IMG_UINT32 ui32Log2PageSize,
-								    PVRSRV_MEMALLOCFLAGS_T uiFlags,
-								    IMG_HANDLE *phPMRPtr);
-
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeChangeSparseMem(IMG_HANDLE hBridge,
 							     IMG_HANDLE hSrvDevMemHeap,
 							     IMG_HANDLE hPMR,
@@ -145,19 +167,24 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeChangeSparseMem(IMG_HANDLE hBridge,
 							     IMG_UINT32 *pui32AllocPageIndices,
 							     IMG_UINT32 ui32FreePageCount,
 							     IMG_UINT32 *pui32FreePageIndices,
-							     IMG_UINT32 ui32Flags,
+							     IMG_UINT32 ui32SparseFlags,
+							     PVRSRV_MEMALLOCFLAGS_T uiFlags,
 							     IMG_DEV_VIRTADDR sDevVAddr,
 							     IMG_UINT64 ui64CPUVAddr,
 							     IMG_UINT32 *pui32Status);
 
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRLocalImportPMR(IMG_HANDLE hBridge,
-							       IMG_HANDLE hExtHandle,
-							       IMG_HANDLE *phPMR,
-							       IMG_DEVMEM_SIZE_T *puiSize,
-							       IMG_DEVMEM_ALIGN_T *psAlign);
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntMapPages(IMG_HANDLE hBridge,
+							       IMG_HANDLE hReservation,
+							       IMG_HANDLE hPMR,
+							       IMG_UINT32 ui32PageCount,
+							       IMG_UINT32 ui32PhysicalPgOffset,
+							       PVRSRV_MEMALLOCFLAGS_T uiFlags,
+							       IMG_DEV_VIRTADDR sDevVAddr);
 
-IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnrefPMR(IMG_HANDLE hBridge,
-							 IMG_HANDLE hPMR);
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntUnmapPages(IMG_HANDLE hBridge,
+								 IMG_HANDLE hReservation,
+								 IMG_DEV_VIRTADDR sDevVAddr,
+								 IMG_UINT32 ui32PageCount);
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemSLCFlushInvalRequest(IMG_HANDLE hBridge,
 									IMG_HANDLE hDeviceNode,
@@ -186,7 +213,8 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeHeapCfgHeapDetails(IMG_HANDLE hBrid
 								IMG_CHAR *puiHeapNameOut,
 								IMG_DEV_VIRTADDR *psDevVAddrBase,
 								IMG_DEVMEM_SIZE_T *puiHeapLength,
-								IMG_UINT32 *pui32Log2DataPageSizeOut);
+								IMG_UINT32 *pui32Log2DataPageSizeOut,
+								IMG_UINT32 *pui32Log2ImportAlignmentOut);
 
 
 #endif /* CLIENT_MM_BRIDGE_H */

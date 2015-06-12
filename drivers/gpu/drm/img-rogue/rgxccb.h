@@ -104,6 +104,9 @@ typedef struct _RGX_CCB_CMD_HELPER_DATA_ {
 	IMG_UINT32				ui32ServerUpdateCount;
 	IMG_UINT32				ui32ServerUnfencedUpdateCount;
 
+	/* Job reference fields */
+	IMG_UINT32				ui32ExtJobRef;
+	IMG_UINT32				ui32IntJobRef;
 } RGX_CCB_CMD_HELPER_DATA;
 
 #define PADDING_COMMAND_SIZE	(sizeof(RGXFWIF_CCB_CMD_HEADER))
@@ -118,6 +121,7 @@ typedef struct _RGX_CCB_CMD_HELPER_DATA_ {
 	TYPE(RS)	\
 	TYPE(TQ_3D)	\
 	TYPE(TQ_2D)	\
+	TYPE(KICKSYNC)	\
 	/* Only used for validating the number of entries in this list */ TYPE(FIXED_COUNT)	\
 	TYPE(FC0)	\
 	TYPE(FC1)	\
@@ -162,7 +166,7 @@ typedef enum _RGX_CCB_REQUESTOR_TUPLE_
 */
 extern IMG_PCHAR aszCCBRequestors[][REQ_TUPLE_CARDINALITY]; 
 
-PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
+PVRSRV_ERROR RGXCreateCCB(PVRSRV_RGXDEV_INFO	*psDevInfo,
 						  IMG_UINT32			ui32CCBSizeLog2,
 						  CONNECTION_DATA		*psConnectionData,
 						  RGX_CCB_REQUESTOR_TYPE	eCCBRequestor,
@@ -200,6 +204,8 @@ PVRSRV_ERROR RGXCmdHelperInitCmdCCB(RGX_CLIENT_CCB          *psClientCCB,
                                     PRGXFWIF_TIMESTAMP_ADDR *ppPostAddr,
                                     RGXFWIF_DEV_VIRTADDR    *ppRMWUFOAddr,
                                     RGXFWIF_CCB_CMD_TYPE    eType,
+                                    IMG_UINT32              ui32ExtJobRef,
+                                    IMG_UINT32              ui32IntJobRef,
                                     IMG_BOOL                bPDumpContinuous,
                                     IMG_CHAR                *pszCommandName,
                                     RGX_CCB_CMD_HELPER_DATA *psCmdHelperData);

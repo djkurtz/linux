@@ -56,6 +56,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "connection_server.h"
 
+#if defined(SUPPORT_GPUVIRT_VALIDATION)
+#include "virt_validation_defs.h"
+#endif
+
 typedef struct _SYS_DEVICE_ID_TAG
 {
 	IMG_UINT32	uiID;
@@ -63,9 +67,28 @@ typedef struct _SYS_DEVICE_ID_TAG
 
 } SYS_DEVICE_ID;
 
+typedef struct _BUILD_INFO_
+{
+	IMG_UINT32	ui32BuildOptions;
+	IMG_UINT32	ui32BuildVersion;
+	IMG_UINT32	ui32BuildRevision;
+	IMG_UINT32	ui32BuildType;
+#define BUILD_TYPE_DEBUG	0
+#define BUILD_TYPE_RELEASE	1
+	/*The above fields are self explanatory */
+	/* B.V.N.C can be added later if required */
+} BUILD_INFO;
+
+typedef struct _DRIVER_INFO_
+{
+	BUILD_INFO	sUMBuildInfo;
+	BUILD_INFO	sKMBuildInfo;
+	IMG_BOOL	bIsNoMatch;
+}DRIVER_INFO;
 
 typedef struct PVRSRV_DATA_TAG
 {
+	DRIVER_INFO					sDriverInfo;
     IMG_UINT32                  ui32NumDevices;      	   	/*!< number of devices in system */
 	SYS_DEVICE_ID				sDeviceID[SYS_DEVICE_COUNT];
 	PVRSRV_DEVICE_NODE			*apsRegisteredDevNodes[SYS_DEVICE_COUNT];
@@ -158,6 +181,12 @@ typedef struct PVRSRV_DBGREQ_NOTIFY_TAG
 		}										\
 	} while(0)
 
+#define PVR_DUMP_DRIVER_INFO(x, y)					\
+		PVR_DUMPDEBUG_LOG(("%s info: BuildOptions: 0x%08x BuildVersion: %d.%d BuildRevision: %8d BuildType: %s", (x), \
+								(y).ui32BuildOptions, \
+								PVRVERSION_UNPACK_MAJ((y).ui32BuildVersion), PVRVERSION_UNPACK_MIN((y).ui32BuildVersion), \
+								(y).ui32BuildRevision, \
+								(BUILD_TYPE_DEBUG == (y).ui32BuildType)?"debug":"release"))
 /*!
 *******************************************************************************
 
@@ -206,16 +235,16 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVSysPrePowerState(PVRSRV_SYS_POWER_STATE eNewPowe
 
 PVRSRV_ERROR IMG_CALLCONV PVRSRVSysPostPowerState(PVRSRV_SYS_POWER_STATE eNewPowerState, IMG_BOOL bForced);
 
-PVRSRV_ERROR LMA_MMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
-							Px_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr);
+PVRSRV_ERROR LMA_PhyContigPagesAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
+							PG_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr);
 
-void LMA_MMUPxFree(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle);
+void LMA_PhyContigPagesFree(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle);
 
-PVRSRV_ERROR LMA_MMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
+PVRSRV_ERROR LMA_PhyContigPagesMap(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle,
 							size_t uiSize, IMG_DEV_PHYADDR *psDevPAddr,
 							void **pvPtr);
 
-void LMA_MMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
+void LMA_PhyContigPagesUnmap(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle,
 					void *pvPtr);
 
 

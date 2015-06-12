@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 4.29.2.51
+@File
+@Title          Header for DDK implementation of the Services abstraction layer
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Header for DDK implementation of the Services abstraction layer
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,33 +41,17 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_4_29_2_51_H_
-#define _RGXCORE_KM_4_29_2_51_H_
+#if !defined (__RGXLAYER_KM_IMPL_H__)
+#define __RGXLAYER_KM_IMPL_H__
 
-/***** Automatically generated file (4/27/2015 2:03:42 PM): Do not edit manually ********************/
-/***** Timestamp:  (4/27/2015 2:03:42 PM)************************************************************/
-/***** CS: @2944502 ******************************************************************/
+#include "rgxlayer_km.h"
 
+typedef struct _RGX_POWER_LAYER_PARAMS_
+{
+	void *psDevInfo;
+	void *psDevConfig;
+	IMG_DEV_PHYADDR sPCAddr;
+} RGX_POWER_LAYER_PARAMS;
 
-/******************************************************************************
- * BVNC = 4.29.2.51 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 4
-#define RGX_BVNC_KM_V 29
-#define RGX_BVNC_KM_N 2
-#define RGX_BVNC_KM_C 51
+#endif /* !defined (__RGXLAYER_KM_IMPL_H__) */
 
-/******************************************************************************
- * Errata 
- *****************************************************************************/
-
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
-
-#endif /* _RGXCORE_KM_4_29_2_51_H_ */

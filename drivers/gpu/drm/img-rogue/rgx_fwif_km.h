@@ -49,10 +49,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxdefs_km.h"
 #include "pvr_debug.h"
 #include "dllist.h"
+#include "rgx_firmware_processor.h"
 
 #if !defined(RGXFW_NUM_OS)
-		#if GPU_VIRTUALIZATION_NUM_OS +1> 1
-				#define RGXFW_NUM_OS        GPU_VIRTUALIZATION_NUM_OS
+		/* Default number of OSIDs is 1 unless configuration is virtualized hypervisor build */
+		#if defined(SUPPORT_PVRSRV_GPUVIRT) && !defined(PVRSRV_GPUVIRT_GUESTDRV) && (PVRSRV_GPUVIRT_NUM_OSID +1> 1)
+				#define RGXFW_NUM_OS        PVRSRV_GPUVIRT_NUM_OSID
 		#else
 				#define RGXFW_NUM_OS        1
 		#endif
@@ -70,6 +72,7 @@ typedef struct _RGXFWIF_HWPERF_CTL_			*PRGXFWIF_HWPERF_CTL;
 typedef struct _RGX_HWPERF_CONFIG_CNTBLK_	*PRGX_HWPERF_CONFIG_CNTBLK;
 typedef IMG_UINT32							*PRGX_HWPERF_SELECT_CUSTOM_CNTRS;
 typedef DLLIST_NODE							RGXFWIF_DLLIST_NODE;
+typedef IMG_UINT32							*PRGXFWIF_ALIGNCHECK;
 #else
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_SIGBUFFER;
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_TRACEBUF;
@@ -83,6 +86,7 @@ typedef RGXFWIF_DEV_VIRTADDR				PRGX_HWPERF_CONFIG_CNTBLK;
 typedef RGXFWIF_DEV_VIRTADDR				PRGX_HWPERF_SELECT_CUSTOM_CNTRS;
 typedef struct {RGXFWIF_DEV_VIRTADDR p;
 				  RGXFWIF_DEV_VIRTADDR n;}	RGXFWIF_DLLIST_NODE;
+typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_ALIGNCHECK;
 
 #endif
 
@@ -139,7 +143,7 @@ typedef struct _RGXFWIF_TACTX_STATE_
 	IMG_UINT64	RGXFW_ALIGN uTAReg_VBS_SO_PRIM1;
 	IMG_UINT64	RGXFW_ALIGN uTAReg_VBS_SO_PRIM2;
 	IMG_UINT64	RGXFW_ALIGN uTAReg_VBS_SO_PRIM3;
-#if defined(RGX_FEATURE_SCALABLE_VDM_GPP) || defined(RGX_FEATURE_PDS_PER_DUST)
+#if defined(SUPPORT_VDM_CONTEXT_STORE_BUFFER_AB)
 	IMG_UINT16	RGXFW_ALIGN ui16TACurrentIdx;
 #endif
 } UNCACHED_ALIGN RGXFWIF_TACTX_STATE;
@@ -151,7 +155,7 @@ typedef struct _RGXFWIF_3DCTX_STATE_
 #if !defined(RGX_FEATURE_S7_TOP_INFRASTRUCTURE)
 	IMG_UINT32	RGXFW_ALIGN au3DReg_ISP_STORE[8];
 #else
-	IMG_UINT32	RGXFW_ALIGN au3DReg_ISP_STORE[32];
+	IMG_UINT32	RGXFW_ALIGN au3DReg_ISP_STORE[64];
 #endif
 	IMG_UINT64	RGXFW_ALIGN u3DReg_PM_DEALLOCATED_MASK_STATUS;
 	IMG_UINT64	RGXFW_ALIGN u3DReg_PM_PDS_MTILEFREE_STATUS;
@@ -161,11 +165,7 @@ typedef struct _RGXFWIF_3DCTX_STATE_
 
 typedef struct _RGXFWIF_COMPUTECTX_STATE_
 {
-#if defined(RGX_FEATURE_COMPUTE_MORTON_CAPABLE)
 	IMG_BOOL	RGXFW_ALIGN	bBufferB;
-#else
-	IMG_UINT64	RGXFW_ALIGN	ui64Padding;
-#endif
 } RGXFWIF_COMPUTECTX_STATE;
 
 
@@ -228,6 +228,7 @@ typedef struct _RGXFWIF_FWCOMMONCONTEXT_
 	IMG_INT32				i32StatsNumStores;					/*!< Number of stores on this context since last update */
 	IMG_INT32				i32StatsNumOutOfMemory;				/*!< Number of OOMs on this context since last update */
 	IMG_INT32				i32StatsNumPartialRenders;			/*!< Number of PRs on this context since last update */
+	RGXFWIF_DM				eDM;								/*!< Data Master type */
 } UNCACHED_ALIGN RGXFWIF_FWCOMMONCONTEXT;
 
 /*!
@@ -520,6 +521,15 @@ typedef struct _RGXFWIF_REG_CFG_
 	RGXFWIF_REG_CFG_REC	 RGXFW_ALIGN  asRegConfigs[RGXFWIF_REG_CFG_MAX_SIZE];
 } UNCACHED_ALIGN RGXFWIF_REG_CFG;
 
+typedef struct _RGXFWIF_REGISTER_GUESTOS_OFFSETS_
+{
+	IMG_UINT32                        ui32OSid;
+	RGXFWIF_DEV_VIRTADDR RGXFW_ALIGN  sKCCBCtl;
+	RGXFWIF_DEV_VIRTADDR              sKCCB;
+	RGXFWIF_DEV_VIRTADDR              sFirmwareCCBCtl;
+	RGXFWIF_DEV_VIRTADDR              sFirmwareCCB;
+} UNCACHED_ALIGN RGXFWIF_REGISTER_GUESTOS_OFFSETS;
+
 typedef enum _RGXFWIF_KCCB_CMD_TYPE_
 {
 	RGXFWIF_KCCB_CMD_KICK						= 101,
@@ -544,6 +554,7 @@ typedef enum _RGXFWIF_KCCB_CMD_TYPE_
 	RGXFWIF_KCCB_CMD_HWPERF_SELECT_CUSTOM_CNTRS = 122, /*!< Configure the custom counters for HWPerf */
 	RGXFWIF_KCCB_CMD_HWPERF_CONFIG_ENABLE_BLKS_DIRECT	= 123, /*!< Configure, clear and enable multiple HWPerf blocks during the init process*/
 	RGXFWIF_KCCB_CMD_LOGTYPE_UPDATE             = 124, /*!< Ask the firmware to update its cached ui32LogType value from the (shared) tracebuf control structure */
+	RGXFWIF_KCCB_CMD_SET_GUESTOS_OFFSETS		= 125, /*!< Register the kccb offsets of a guestOS with the FW and enable checking its queues */
 
 #if defined(RGX_FEATURE_RAY_TRACING)
 	RGXFWIF_FWCCB_CMD_DOPPLER_MEMORY_GROW		= 130,
@@ -575,6 +586,7 @@ typedef struct _RGXFWIF_KCCB_CMD_
 		RGXFWIF_FREELIST_GS_DATA			sFreeListGSData;		/*!< Feedback for Freelist grow/shrink */
 		RGXFWIF_FREELISTS_RECONSTRUCTION_DATA	sFreeListsReconstructionData;	/*!< Feedback for Freelists reconstruction */
 		RGXFWIF_REGCONFIG_DATA				sRegConfigData;			/*!< Data for custom register configuration */
+		RGXFWIF_REGISTER_GUESTOS_OFFSETS    sRegisterGuestOsOffests;/*!< Data for registering a guestOS with the FW */
 	} UNCACHED_ALIGN uCmdData;
 } UNCACHED_ALIGN RGXFWIF_KCCB_CMD;
 
@@ -607,6 +619,7 @@ typedef struct _RGXFWIF_FWCCB_CMD_CONTEXT_RESET_DATA_
 {
 	IMG_UINT32						ui32ServerCommonContextID;	/*!< Context affected by the reset */
 	RGXFWIF_CONTEXT_RESET_REASON	eResetReason;				/*!< Reason for reset */
+	IMG_UINT32						ui32ResetJobRef;			/*!< Job ref running at the time of reset */
 } RGXFWIF_FWCCB_CMD_CONTEXT_RESET_DATA;
 
 
@@ -736,17 +749,11 @@ typedef struct _RGXFWIF_INIT_
 	PRGXFWIF_REG_CFG		psRegCfg;
 	PRGXFWIF_HWPERF_CTL		psHWPerfCtl;
 
-#if defined(RGXFW_ALIGNCHECKS)
-#if defined(RGX_FIRMWARE)
-	IMG_UINT32*				paui32AlignChecks;
-#else
-	RGXFWIF_DEV_VIRTADDR	paui32AlignChecks;
-#endif
-#endif
+	PRGXFWIF_ALIGNCHECK		paui32AlignChecks;
 
-	/* Core clock speed at FW boot time */ 
+	/* Core clock speed at FW boot time */
 	IMG_UINT32              ui32InitialCoreClockSpeed;
-	
+
 	/* APM latency in ms before signalling IDLE to the host */
 	IMG_UINT32				ui32ActivePMLatencyms;
 
@@ -764,8 +771,16 @@ typedef struct _RGXFWIF_INIT_
 
 	RGXFWIF_DMA_ADDR		sCorememDataStore;
 
+	FW_PERF_CONF			eFirmwarePerf;
+
 #if defined(RGX_FEATURE_SLC_VIVT)
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sSLC3FenceDevVAddr;
+#endif
+
+#if defined(RGX_FIRMWARE)
+	IMG_BYTE                *pbT1Stack;
+#else
+	RGXFWIF_DEV_VIRTADDR    pbT1Stack;
 #endif
 
 } UNCACHED_ALIGN RGXFWIF_INIT;

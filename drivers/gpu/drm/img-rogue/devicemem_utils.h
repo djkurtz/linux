@@ -136,6 +136,9 @@ struct _DEVMEM_HEAP_ {
        feed this down to the server */
     IMG_UINT32 uiLog2Quantum;
 
+    /* Store a copy of the minimum import alignment */
+    IMG_UINT32 uiLog2ImportAlignment;
+
     /* The parent memory context for this heap */
     struct _DEVMEM_CONTEXT_ *psCtx;
 
@@ -174,7 +177,7 @@ typedef struct _DEVMEM_CPU_IMPORT_ {
 
 typedef struct _DEVMEM_IMPORT_ {
 	SHARED_DEV_CONNECTION hDevConnection;
-    IMG_DEVMEM_ALIGN_T uiAlign;			/*!< Alignment requirement */
+	IMG_DEVMEM_ALIGN_T uiAlign;			/*!< Alignment of the PMR */
 	DEVMEM_SIZE_T uiSize;				/*!< Size of import */
     ATOMIC_T hRefCount;					/*!< Refcount for this import */
     DEVMEM_PROPERTIES_T uiProperties;	/*!< Stores properties of an import like if
@@ -215,7 +218,35 @@ struct _DEVMEM_MEMDESC_ {
 #if defined(PVR_RI_DEBUG)
     IMG_HANDLE hRIHandle;					/*!< Handle to RI information */
 #endif
+};
 
+/* The physical descriptor used to store handles and information of
+ * device physical allocations. */
+struct _DEVMEMX_PHYS_MEMDESC_ {
+	IMG_UINT32 uiNumPages;					/*!< Number of pages that the import has*/
+	IMG_UINT32 uiLog2PageSize;				/*!< Page size */
+	ATOMIC_T hRefCount;						/*!< Refcount of the memdesc */
+	DEVMEM_FLAGS_T uiFlags;					/*!< Flags for this import */
+	IMG_HANDLE hPMR;						/*!< Handle to the PMR */
+	DEVMEM_CPU_IMPORT sCPUImport;			/*!< CPU specifics of the memdesc */
+	DEVMEM_BRIDGE_HANDLE hBridge;			/*!< Bridge connection for the server */
+};
+
+/* The virtual descriptor used to store handles and information of a
+ * device virtual range and the mappings to it. */
+struct _DEVMEMX_VIRT_MEMDESC_ {
+	IMG_UINT32 uiNumPages;					/*!< Number of pages that the import has*/
+	DEVMEM_FLAGS_T uiFlags;					/*!< Flags for this import */
+	DEVMEMX_PHYSDESC **apsPhysDescTable;		/*!< Table to store links to physical descs */
+	DEVMEM_DEVICE_IMPORT sDeviceImport;		/*!< Device specifics of the memdesc */
+
+#if defined(SUPPORT_PAGE_FAULT_DEBUG)
+	DEVICEMEM_HISTORY_MEMDESC_DATA sTraceData;	/*!< To track mappings in this range */
+#endif
+
+#if defined(PVR_RI_DEBUG)
+	IMG_HANDLE hRIHandle;					/*!< Handle to RI information */
+#endif
 };
 
 /******************************************************************************

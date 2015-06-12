@@ -577,7 +577,8 @@ _UnrefAndMaybeDestroy(PMR *psPMR)
 
 static IMG_BOOL _PMRIsSparse(const PMR *psPMR)
 {
-	if (psPMR->psMappingTable->ui32NumVirtChunks == psPMR->psMappingTable->ui32NumPhysChunks)
+	if ((psPMR->psMappingTable->ui32NumVirtChunks == psPMR->psMappingTable->ui32NumPhysChunks) && \
+			(psPMR->psMappingTable->ui32NumVirtChunks == 1))
 	{
 		return IMG_FALSE;
 	}
@@ -891,7 +892,6 @@ PMRExportPMR(PMR *psPMR,
 PVRSRV_ERROR
 PMRUnexportPMR(PMR_EXPORT *psPMRExport)
 {
-    /* FIXME: probably shouldn't be assertions? */
     PVR_ASSERT(psPMRExport != NULL);
     PVR_ASSERT(psPMRExport->psPMR != NULL);
     PVR_ASSERT(psPMRExport->psPMR->uiRefCount > 0);
@@ -913,7 +913,6 @@ PMRImportPMR(PMR_EXPORT *psPMRExport,
 {
     PMR *psPMR;
 
-    /* FIXME: probably shouldn't be assertions? */
     PVR_ASSERT(psPMRExport != NULL);
     PVR_ASSERT(psPMRExport->psPMR != NULL);
     PVR_ASSERT(psPMRExport->psPMR->uiRefCount > 0);
@@ -1125,7 +1124,7 @@ _PMRAcquireKernelMappingData(PMR *psPMR,
     }
     PVR_ASSERT (psPMR->psFuncTab->pfnReleaseKernelMappingData != NULL);
 
-    PMR_Flags(psPMR, &ulFlags);
+    ulFlags = PMR_Flags(psPMR);
 
     eError = psPMR->psFuncTab->pfnAcquireKernelMappingData(psPMR->pvFlavourData,
                                                            uiLogicalOffset,
@@ -1344,9 +1343,7 @@ _PMR_ReadBytesPhysical(PMR *psPMR,
 
         IMG_HANDLE hKernelMappingHandle;
         IMG_UINT8 *pcKernelAddress;
-        PMR_FLAGS_T ulFlags;
-
-        PMR_Flags(psPMR, &ulFlags);
+        PMR_FLAGS_T ulFlags = PMR_Flags(psPMR);
 
         eError = psPMR->psFuncTab->pfnAcquireKernelMappingData(psPMR->pvFlavourData,
                                                                (size_t) uiPhysicalOffset,
@@ -1501,9 +1498,7 @@ _PMR_WriteBytesPhysical(PMR *psPMR,
 
         IMG_HANDLE hKernelMappingHandle;
         IMG_UINT8 *pcKernelAddress;
-        PMR_FLAGS_T ulFlags;
-
-        PMR_Flags(psPMR, &ulFlags);
+        PMR_FLAGS_T ulFlags = PMR_Flags(psPMR);
 
         eError = psPMR->psFuncTab->pfnAcquireKernelMappingData(psPMR->pvFlavourData,
                                                                (size_t) uiPhysicalOffset,
@@ -1559,10 +1554,9 @@ PMR_WriteBytes(PMR *psPMR,
     IMG_DEVMEM_OFFSET_T uiPhysicalOffset;
     size_t uiBytesCopied = 0;
 
-	/* FIXME: When we honour CPU mapping flags remove the #if 0*/
 	#if 0
 	/* Check that writes are allowed */
-	PMR_Flags(psPMR, &uiFlags);
+    uiFlags = PMR_Flags(psPMR);
 	if (!(uiFlags & PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE))
 	{
 		return PVRSRV_ERROR_PMR_NOT_PERMITTED;
@@ -1663,14 +1657,31 @@ PMRUnrefPMR(PMR *psPMR)
     return PVRSRV_OK;
 }
 
-PVRSRV_ERROR
-PMR_Flags(const PMR *psPMR,
-          PMR_FLAGS_T *puiPMRFlags)
+extern PVRSRV_ERROR
+PMRUnrefUnlockPMR(PMR *psPMR)
+{
+	PMRUnlockSysPhysAddresses(psPMR);
+
+	PMRUnrefPMR(psPMR);
+
+	return PVRSRV_OK;
+}
+
+PMR_FLAGS_T
+PMR_Flags(const PMR *psPMR)
 {
     PVR_ASSERT(psPMR != NULL);
 
-    *puiPMRFlags = psPMR->uiFlags;
-    return PVRSRV_OK;
+    return psPMR->uiFlags;
+}
+
+IMG_BOOL
+PMR_IsSparse(const PMR *psPMR)
+{
+    PVR_ASSERT(psPMR != NULL);
+
+    return _PMRIsSparse(psPMR);
+
 }
 
 PVRSRV_ERROR
@@ -1959,7 +1970,7 @@ PMR_PDumpSymbolicAddr(const PMR *psPMR,
 	if (!bValid)
 	{
 		/* We should never be asked a symbolic address of an invalid chunk */
-		PDumpComment("Invalid chunk (PVRSRV_ERROR_PMR_INVALID_CHUNK)?, May be sparse memory");
+		PDumpCommentWithFlags(PDUMP_FLAGS_CONTINUOUS, "Invalid chunk (PVRSRV_ERROR_PMR_INVALID_CHUNK)?, May be sparse memory");
 		/*	For sparse allocations, for a given logical address, there may not be a
 		 *	physical memory backing, the virtual range can still be valid.
 		 */
@@ -2113,7 +2124,7 @@ PMRPDumpLoadMem(PMR *psPMR,
 
 	/* required when !bZero */
 	#define PMR_MAX_PDUMP_BUFSZ 16384
-	IMG_CHAR aszParamStreamFilename[PMR_MAX_PARAMSTREAM_FILENAME_LENGTH_DEFAULT];
+	IMG_CHAR aszParamStreamFilename[PDUMP_PARAM_MAX_FILE_NAME];
 	IMG_UINT8 *pcBuffer = NULL;
 
 	PVR_ASSERT(uiLogicalOffset + uiSize <= psPMR->uiLogicalSize);
@@ -2146,7 +2157,8 @@ PMRPDumpLoadMem(PMR *psPMR,
 		}
 
 		pcBuffer = OSAllocMem(uiBufSz);
-		PVR_ASSERT(pcBuffer != NULL);
+
+		PVR_LOGR_IF_NOMEM(pcBuffer, "OSAllocMem");
 
 		eError = PMRLockSysPhysAddresses(psPMR,
 								psPMR->uiLog2ContiguityGuarantee);
@@ -2210,10 +2222,20 @@ PMRPDumpLoadMem(PMR *psPMR,
 							  &aszParamStreamFilename[0],
 							  sizeof(aszParamStreamFilename),
 							  &uiParamStreamFileOffset);
-				if(eError != PVRSRV_OK)
+				if (eError == PVRSRV_ERROR_PDUMP_NOT_ALLOWED)
 				{
+					/* Write to parameter file prevented under the flags and
+					 * current state of the driver so skip further writes.
+					 */
+					eError = PVRSRV_OK;
+					goto err_unlock_phys;
+				}
+				else if(eError != PVRSRV_OK)
+				{
+					PDUMP_ERROR(eError, "Failed to write PMR memory to parameter file");
 				    goto err_unlock_phys;
 				}
+				/* else OK and continue with script write */
 			}
 
 			eError = PDumpPMRLDB(aszMemspaceName,
@@ -2295,16 +2317,10 @@ PMRPDumpSaveToFile(const PMR *psPMR,
 }
 #endif	/* PDUMP */
 
-/*
-   FIXME: Find a better way to do this
- */
-
 void *PMRGetPrivateDataHack(const PMR *psPMR,
                                 const PMR_IMPL_FUNCTAB *psFuncTab)
 {
-    PVR_ASSERT(psFuncTab == psPMR->psFuncTab);
-
-    return psPMR->pvFlavourData;
+    return (psFuncTab == psPMR->psFuncTab) ? psPMR->pvFlavourData : NULL;
 }
 
 PVRSRV_ERROR
@@ -2344,7 +2360,6 @@ PMRWritePMPageList(/* Target PMR, offset, and length */
     IMG_UINT32 *pui32DataPtr = NULL;
     IMG_BOOL *pbPageIsValid;
 #endif
-    /* FIXME: should this be configurable? */
     uiWordSize = 4;
 
     /* check we're being asked to write the same number of 4-byte units as there are pages */
@@ -2377,11 +2392,9 @@ PMRWritePMPageList(/* Target PMR, offset, and length */
     }
 
     /* the PMR into which we are writing must not be user CPU mappable: */
-    eError = PMR_Flags(psPageListPMR, &uiFlags);
-    if ((eError != PVRSRV_OK) ||
-		((uiFlags & (PVRSRV_MEMALLOCFLAG_CPU_READABLE | PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE)) != 0))
+    uiFlags = PMR_Flags(psPageListPMR);
+    if ((uiFlags & (PVRSRV_MEMALLOCFLAG_CPU_READABLE | PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE)) != 0)
     {
-		PVR_DPF((PVR_DBG_ERROR, "eError = %d", eError));
 		PVR_DPF((PVR_DBG_ERROR, "masked flags = 0x%08x", (uiFlags & (PVRSRV_MEMALLOCFLAG_CPU_READABLE | PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE))));
 		PVR_DPF((PVR_DBG_ERROR, "Page list PMR allows CPU mapping (0x%08x)", uiFlags));
 		eError = PVRSRV_ERROR_DEVICEMEM_INVALID_PMR_FLAGS;
@@ -2406,6 +2419,7 @@ PMRWritePMPageList(/* Target PMR, offset, and length */
 	if (psPageList == NULL)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "Failed to allocate PMR page list"));
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 		goto e0;
 	}
 	psPageList->psReferencePMR = psReferencePMR;
@@ -2590,7 +2604,7 @@ e3:
 }
 
 
-PVRSRV_ERROR /* FIXME: should be void */
+PVRSRV_ERROR
 PMRUnwritePMPageList(PMR_PAGELIST *psPageList)
 {
     PVRSRV_ERROR eError2;
@@ -2933,12 +2947,6 @@ PMRDeInit()
 	OSLockDestroy(gGlobalLookupPMRLock);
 
     _gsSingletonPMRContext.bModuleInitialised = IMG_FALSE;
-
-    /*
-      FIXME:
-
-      should deinitialise the mutex here
-    */
 
     return PVRSRV_OK;
 }

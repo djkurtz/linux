@@ -52,10 +52,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_tl.h"
 
 
-/* Bridge module IN and OUT structure sizes as specified in optional MODULE_IOCTL */
-#define PVRSRV_BRIDGE_PVRTL_IN__SIZE	 64
-#define PVRSRV_BRIDGE_PVRTL_OUT_SIZE	 24
-
 #define PVRSRV_BRIDGE_PVRTL_CMD_FIRST			0
 #define PVRSRV_BRIDGE_PVRTL_TLOPENSTREAM			PVRSRV_BRIDGE_PVRTL_CMD_FIRST+0
 #define PVRSRV_BRIDGE_PVRTL_TLCLOSESTREAM			PVRSRV_BRIDGE_PVRTL_CMD_FIRST+1
@@ -75,8 +71,6 @@ typedef struct PVRSRV_BRIDGE_IN_TLOPENSTREAM_TAG
 	IMG_UINT32 ui32Mode;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_TLOPENSTREAM;
 
-static_assert((sizeof( PVRSRV_BRIDGE_IN_TLOPENSTREAM)<=PVRSRV_BRIDGE_PVRTL_IN__SIZE), "PVRSRV_BRIDGE_PVRTL_IN__SIZE is too small");
-
 /* Bridge out structure for TLOpenStream */
 typedef struct PVRSRV_BRIDGE_OUT_TLOPENSTREAM_TAG
 {
@@ -84,8 +78,6 @@ typedef struct PVRSRV_BRIDGE_OUT_TLOPENSTREAM_TAG
 	IMG_HANDLE hTLPMR;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_TLOPENSTREAM;
-
-static_assert((sizeof( PVRSRV_BRIDGE_OUT_TLOPENSTREAM)<=PVRSRV_BRIDGE_PVRTL_OUT_SIZE), "PVRSRV_BRIDGE_PVRTL_OUT_SIZE is too small");
 
 
 /*******************************************
@@ -98,15 +90,11 @@ typedef struct PVRSRV_BRIDGE_IN_TLCLOSESTREAM_TAG
 	IMG_HANDLE hSD;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_TLCLOSESTREAM;
 
-static_assert((sizeof( PVRSRV_BRIDGE_IN_TLCLOSESTREAM)<=PVRSRV_BRIDGE_PVRTL_IN__SIZE), "PVRSRV_BRIDGE_PVRTL_IN__SIZE is too small");
-
 /* Bridge out structure for TLCloseStream */
 typedef struct PVRSRV_BRIDGE_OUT_TLCLOSESTREAM_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_TLCLOSESTREAM;
-
-static_assert((sizeof( PVRSRV_BRIDGE_OUT_TLCLOSESTREAM)<=PVRSRV_BRIDGE_PVRTL_OUT_SIZE), "PVRSRV_BRIDGE_PVRTL_OUT_SIZE is too small");
 
 
 /*******************************************
@@ -119,8 +107,6 @@ typedef struct PVRSRV_BRIDGE_IN_TLACQUIREDATA_TAG
 	IMG_HANDLE hSD;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_TLACQUIREDATA;
 
-static_assert((sizeof( PVRSRV_BRIDGE_IN_TLACQUIREDATA)<=PVRSRV_BRIDGE_PVRTL_IN__SIZE), "PVRSRV_BRIDGE_PVRTL_IN__SIZE is too small");
-
 /* Bridge out structure for TLAcquireData */
 typedef struct PVRSRV_BRIDGE_OUT_TLACQUIREDATA_TAG
 {
@@ -128,8 +114,6 @@ typedef struct PVRSRV_BRIDGE_OUT_TLACQUIREDATA_TAG
 	IMG_UINT32 ui32ReadLen;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_TLACQUIREDATA;
-
-static_assert((sizeof( PVRSRV_BRIDGE_OUT_TLACQUIREDATA)<=PVRSRV_BRIDGE_PVRTL_OUT_SIZE), "PVRSRV_BRIDGE_PVRTL_OUT_SIZE is too small");
 
 
 /*******************************************
@@ -144,15 +128,11 @@ typedef struct PVRSRV_BRIDGE_IN_TLRELEASEDATA_TAG
 	IMG_UINT32 ui32ReadLen;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_TLRELEASEDATA;
 
-static_assert((sizeof( PVRSRV_BRIDGE_IN_TLRELEASEDATA)<=PVRSRV_BRIDGE_PVRTL_IN__SIZE), "PVRSRV_BRIDGE_PVRTL_IN__SIZE is too small");
-
 /* Bridge out structure for TLReleaseData */
 typedef struct PVRSRV_BRIDGE_OUT_TLRELEASEDATA_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_TLRELEASEDATA;
-
-static_assert((sizeof( PVRSRV_BRIDGE_OUT_TLRELEASEDATA)<=PVRSRV_BRIDGE_PVRTL_OUT_SIZE), "PVRSRV_BRIDGE_PVRTL_OUT_SIZE is too small");
 
 
 #endif /* COMMON_PVRTL_BRIDGE_H */

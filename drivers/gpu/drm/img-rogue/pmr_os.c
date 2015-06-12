@@ -61,28 +61,74 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "process_stats.h"
 #endif
 
+/*
+ * x86_32:
+ * Use vm_insert_page because remap_pfn_range has issues when mapping HIGHMEM
+ * pages with default memory attributes; these HIGHMEM pages are skipped in
+ * set_pages_array_[uc,wc] during allocation; see reserve_pfn_range().
+ * Also vm_insert_page is faster.
+ *
+ * x86_64:
+ * Use vm_insert_page because it is faster.
+ *
+ * Other platforms:
+ * Use remap_pfn_range by default because it does not issue a cache flush.
+ * It is known that ARM32 benefits from this. When other platforms become
+ * available it has to be investigated if this asumption holds for them as well.
+ *
+ * Since vm_insert_page does more precise memory accounting we have the build
+ * flag PVR_MMAP_USE_VM_INSERT that forces its use. This is useful as a debug
+ * feature.
+ *
+ */
+#if defined(CONFIG_X86) || defined(PVR_MMAP_USE_VM_INSERT)
+#define PMR_OS_USE_VM_INSERT_PAGE 1
+#endif
+
 static void MMapPMROpen(struct vm_area_struct *ps_vma)
 {
+	PMR *psPMR = ps_vma->vm_private_data;
+
 	/* Our VM flags should ensure this function never gets called */
-	PVR_ASSERT(0);
+	PVR_DPF((PVR_DBG_WARNING,
+			 "%s: Unexpected mmap open call, this is probably an application bug.",
+			 __func__));
+	PVR_DPF((PVR_DBG_WARNING,
+			 "%s: vma struct: 0x%p, vAddr: %#lX, length: %#lX, PMR pointer: 0x%p",
+			 __func__,
+			 ps_vma,
+			 ps_vma->vm_start,
+			 ps_vma->vm_end - ps_vma->vm_start,
+			 psPMR));
+
+	/* In case we get called anyway let's do things right by increasing the refcount and
+	 * locking down the physical addresses. */
+	PMRRefPMR(psPMR);
+
+	if (PMRLockSysPhysAddresses(psPMR, PAGE_SHIFT) != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Could not lock down physical addresses, aborting.", __func__));
+		PMRUnrefPMR(psPMR);
+	}
 }
 
 static void MMapPMRClose(struct vm_area_struct *ps_vma)
 {
 	PMR *psPMR = ps_vma->vm_private_data;
-	uintptr_t vAddr = ps_vma->vm_start;
 
 #if defined(PVRSRV_ENABLE_PROCESS_STATS)
+#if	defined(PVRSRV_ENABLE_MEMORY_STATS)
+	uintptr_t vAddr = ps_vma->vm_start;
+
 	while (vAddr < ps_vma->vm_end)
 	{
 		/* USER MAPPING */
-#if !defined(PVRSRV_ENABLE_MEMORY_STATS)
-		PVRSRVStatsDecrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_MAP_UMA_LMA_PAGES, PAGE_SIZE);
-#else
 		PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_MAP_UMA_LMA_PAGES, (IMG_UINT64)vAddr);
-#endif
 		vAddr += PAGE_SIZE;
 	}
+#else
+	PVRSRVStatsDecrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_MAP_UMA_LMA_PAGES, ps_vma->vm_end - ps_vma->vm_start);
+#endif
 #endif
 
 	PMRUnlockSysPhysAddresses(psPMR);
@@ -154,14 +200,14 @@ OSMMapPMRGeneric(PMR *psPMR, PMR_MMAP_DATA pOSMMapData)
 	IMG_UINT32 ui32CPUCacheFlags;
 	unsigned long ulNewFlags = 0;
 	pgprot_t sPageProt;
-#if defined(PVR_MMAP_USE_VM_INSERT)
-	IMG_BOOL bMixedMap = IMG_FALSE;
-#endif
 	IMG_CPU_PHYADDR asCpuPAddr[PMR_MAX_TRANSLATION_STACK_ALLOC];
 	IMG_BOOL abValid[PMR_MAX_TRANSLATION_STACK_ALLOC];
 	IMG_UINT32 uiOffsetIdx, uiNumOfPFNs;
 	IMG_CPU_PHYADDR *psCpuPAddr;
 	IMG_BOOL *pbValid;
+#if defined(PMR_OS_USE_VM_INSERT_PAGE)
+	IMG_BOOL bMixedMap = IMG_FALSE;
+#endif
 
 	eError = PMRLockSysPhysAddresses(psPMR, PAGE_SHIFT);
 	if (eError != PVRSRV_OK)
@@ -181,11 +227,7 @@ OSMMapPMRGeneric(PMR *psPMR, PMR_MMAP_DATA pOSMMapData)
 	 * against the requested mode, and possibly to set up the cache
 	 * control protflags
 	 */
-	eError = PMR_Flags(psPMR, &ulPMRFlags);
-	if (eError != PVRSRV_OK)
-	{
-		goto e0;
-	}
+	ulPMRFlags = PMR_Flags(psPMR);
 
 	ulNewFlags = ps_vma->vm_flags;
 #if 0
@@ -293,40 +335,34 @@ OSMMapPMRGeneric(PMR *psPMR, PMR_MMAP_DATA pOSMMapData)
 		goto e3;
 	}
 
-#if defined(PVR_MMAP_USE_VM_INSERT)
+#if defined(PMR_OS_USE_VM_INSERT_PAGE)
+	/*
+	 * Scan the map range for pfns without struct page* handling. If
+	 * we find one, this is a mixed map, and we can't use
+	 * vm_insert_page()
+	 */
+	for (uiOffsetIdx = 0; uiOffsetIdx < uiNumOfPFNs; ++uiOffsetIdx)
 	{
-		/*
-		 * Scan the map range for pfns without struct page* handling. If
-		 * we find one, this is a mixed map, and we can't use
-		 * vm_insert_page()
-		 */
-		for (uiOffsetIdx = 0; uiOffsetIdx < uiNumOfPFNs; ++uiOffsetIdx)
+		if (pbValid[uiOffsetIdx])
 		{
-			if (pbValid[uiOffsetIdx])
-			{
-				uiPFN = psCpuPAddr[uiOffsetIdx].uiAddr >> PAGE_SHIFT;
-				PVR_ASSERT(((IMG_UINT64)uiPFN << PAGE_SHIFT) == psCpuPAddr[uiOffsetIdx].uiAddr);
+			uiPFN = psCpuPAddr[uiOffsetIdx].uiAddr >> PAGE_SHIFT;
+			PVR_ASSERT(((IMG_UINT64)uiPFN << PAGE_SHIFT) == psCpuPAddr[uiOffsetIdx].uiAddr);
 
-				if (!pfn_valid(uiPFN) || page_count(pfn_to_page(uiPFN)) == 0)
-				{
-					bMixedMap = IMG_TRUE;
-				}
+			if (!pfn_valid(uiPFN) || page_count(pfn_to_page(uiPFN)) == 0)
+			{
+				bMixedMap = IMG_TRUE;
+				break;
 			}
 		}
-
-		if (bMixedMap)
-		{
-			ps_vma->vm_flags |= VM_MIXEDMAP;
-		}
 	}
-#else /* defined(PVR_MMAP_USE_VM_INSERT) */
-	/*
-	 * Functions like zap_vma_ptes does explicit check for the vma_pfn flag.
-	 * The entries that are being zapped could be default pages inserted by
-	 * OS no page handler. Hence safe to set the flag.
-	 */
+
+	if (bMixedMap)
+	{
+		ps_vma->vm_flags |= VM_MIXEDMAP;
+	}
+#else
 	ps_vma->vm_flags |= VM_PFNMAP;
-#endif
+#endif /* PMR_OS_USE_VM_INSERT_PAGE */
 
 	for (uiOffset = 0; uiOffset < uiLength; uiOffset += 1ULL<<PAGE_SHIFT)
 	{
@@ -346,7 +382,7 @@ OSMMapPMRGeneric(PMR *psPMR, PMR_MMAP_DATA pOSMMapData)
 			uiPFN = psCpuPAddr[uiOffsetIdx].uiAddr >> PAGE_SHIFT;
 			PVR_ASSERT(((IMG_UINT64)uiPFN << PAGE_SHIFT) == psCpuPAddr[uiOffsetIdx].uiAddr);
 
-#if defined(PVR_MMAP_USE_VM_INSERT)
+#if defined(PMR_OS_USE_VM_INSERT_PAGE)
 			if (bMixedMap)
 			{
 				/*
@@ -364,13 +400,14 @@ OSMMapPMRGeneric(PMR *psPMR, PMR_MMAP_DATA pOSMMapData)
 							 ps_vma->vm_start + uiOffset,
 							 pfn_to_page(uiPFN));
 			}
-#else /* defined(PVR_MMAP_USE_VM_INSERT) */
+#else
 			iStatus = remap_pfn_range(ps_vma,
 						  ps_vma->vm_start + uiOffset,
 						  uiPFN,
 						  uiNumContiguousBytes,
 						  ps_vma->vm_page_prot);
-#endif
+#endif  /* PMR_OS_USE_VM_INSERT_PAGE */
+
 			PVR_ASSERT(iStatus == 0);
 			if(iStatus)
 			{
@@ -382,20 +419,17 @@ OSMMapPMRGeneric(PMR *psPMR, PMR_MMAP_DATA pOSMMapData)
 				goto e3;
 			}
 		}
-#if defined(PVRSRV_ENABLE_PROCESS_STATS)
-/* USER MAPPING*/
-#if !defined(PVRSRV_ENABLE_MEMORY_STATS)
-		PVRSRVStatsIncrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_MAP_UMA_LMA_PAGES, PAGE_SIZE);
-#else
+#if defined(PVRSRV_ENABLE_PROCESS_STATS) && defined(PVRSRV_ENABLE_MEMORY_STATS)
 		PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_MAP_UMA_LMA_PAGES,
 					     (void*)(uintptr_t)(ps_vma->vm_start + uiOffset),
 					     psCpuPAddr[uiOffsetIdx],
 					     PAGE_SIZE,
 					     NULL);
 #endif
-#endif
 	}
-
+#if defined(PVRSRV_ENABLE_PROCESS_STATS) && !defined(PVRSRV_ENABLE_MEMORY_STATS)
+		PVRSRVStatsIncrMemAllocStat(PVRSRV_MEM_ALLOC_TYPE_MAP_UMA_LMA_PAGES, uiNumOfPFNs * PAGE_SIZE);
+#endif
 	if (psCpuPAddr != asCpuPAddr)
 	{
 		OSFreeMem(psCpuPAddr);

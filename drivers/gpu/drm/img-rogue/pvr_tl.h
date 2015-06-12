@@ -51,7 +51,7 @@ extern "C" {
 
 #include "img_defs.h"
 #include "pvrsrv_error.h"
-#include "services.h"
+#include "services_km.h"
 
 #include "pvr_tlcommon.h"
 

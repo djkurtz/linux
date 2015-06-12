@@ -892,21 +892,29 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 					 CONNECTION_DATA *psConnection)
 {
 	RGX_SERVER_RENDER_CONTEXT * psRenderContextInt = NULL;
-	PRGXFWIF_UFO_ADDR *sClientTAFenceUFOAddressInt = NULL;
+	SYNC_PRIMITIVE_BLOCK * *psClientTAFenceSyncPrimBlockInt = NULL;
+	IMG_HANDLE *hClientTAFenceSyncPrimBlockInt2 = NULL;
+	IMG_UINT32 *ui32ClientTAFenceSyncOffsetInt = NULL;
 	IMG_UINT32 *ui32ClientTAFenceValueInt = NULL;
-	PRGXFWIF_UFO_ADDR *sClientTAUpdateUFOAddressInt = NULL;
+	SYNC_PRIMITIVE_BLOCK * *psClientTAUpdateSyncPrimBlockInt = NULL;
+	IMG_HANDLE *hClientTAUpdateSyncPrimBlockInt2 = NULL;
+	IMG_UINT32 *ui32ClientTAUpdateSyncOffsetInt = NULL;
 	IMG_UINT32 *ui32ClientTAUpdateValueInt = NULL;
 	IMG_UINT32 *ui32ServerTASyncFlagsInt = NULL;
 	SERVER_SYNC_PRIMITIVE * *psServerTASyncsInt = NULL;
 	IMG_HANDLE *hServerTASyncsInt2 = NULL;
-	PRGXFWIF_UFO_ADDR *sClient3DFenceUFOAddressInt = NULL;
+	SYNC_PRIMITIVE_BLOCK * *psClient3DFenceSyncPrimBlockInt = NULL;
+	IMG_HANDLE *hClient3DFenceSyncPrimBlockInt2 = NULL;
+	IMG_UINT32 *ui32Client3DFenceSyncOffsetInt = NULL;
 	IMG_UINT32 *ui32Client3DFenceValueInt = NULL;
-	PRGXFWIF_UFO_ADDR *sClient3DUpdateUFOAddressInt = NULL;
+	SYNC_PRIMITIVE_BLOCK * *psClient3DUpdateSyncPrimBlockInt = NULL;
+	IMG_HANDLE *hClient3DUpdateSyncPrimBlockInt2 = NULL;
+	IMG_UINT32 *ui32Client3DUpdateSyncOffsetInt = NULL;
 	IMG_UINT32 *ui32Client3DUpdateValueInt = NULL;
 	IMG_UINT32 *ui32Server3DSyncFlagsInt = NULL;
 	SERVER_SYNC_PRIMITIVE * *psServer3DSyncsInt = NULL;
 	IMG_HANDLE *hServer3DSyncsInt2 = NULL;
-	IMG_INT32 *i32CheckFenceFDsInt = NULL;
+	SYNC_PRIMITIVE_BLOCK * psPRFenceUFOSyncPrimBlockInt = NULL;
 	IMG_CHAR *uiUpdateFenceNameInt = NULL;
 	IMG_BYTE *psTACmdInt = NULL;
 	IMG_BYTE *ps3DPRCmdInt = NULL;
@@ -914,14 +922,24 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 	RGX_RTDATA_CLEANUP_DATA * psRTDataCleanupInt = NULL;
 	RGX_ZSBUFFER_DATA * psZBufferInt = NULL;
 	RGX_ZSBUFFER_DATA * psSBufferInt = NULL;
+	IMG_UINT32 *ui32SyncPMRFlagsInt = NULL;
+	PMR * *psSyncPMRsInt = NULL;
+	IMG_HANDLE *hSyncPMRsInt2 = NULL;
 
 
 
 
 	if (psRGXKickTA3DIN->ui32ClientTAFenceCount != 0)
 	{
-		sClientTAFenceUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClientTAFenceUFOAddressInt)
+		psClientTAFenceSyncPrimBlockInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(SYNC_PRIMITIVE_BLOCK *));
+		if (!psClientTAFenceSyncPrimBlockInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+		hClientTAFenceSyncPrimBlockInt2 = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_HANDLE));
+		if (!hClientTAFenceSyncPrimBlockInt2)
 		{
 			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 	
@@ -930,9 +948,29 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 	}
 
 			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->psClientTAFenceUFOAddress, psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClientTAFenceUFOAddressInt, psRGXKickTA3DIN->psClientTAFenceUFOAddress,
-				psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->phClientTAFenceSyncPrimBlock, psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hClientTAFenceSyncPrimBlockInt2, psRGXKickTA3DIN->phClientTAFenceSyncPrimBlock,
+				psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32ClientTAFenceCount != 0)
+	{
+		ui32ClientTAFenceSyncOffsetInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32));
+		if (!ui32ClientTAFenceSyncOffsetInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->pui32ClientTAFenceSyncOffset, psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ClientTAFenceSyncOffsetInt, psRGXKickTA3DIN->pui32ClientTAFenceSyncOffset,
+				psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
 			{
 				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
@@ -960,8 +998,15 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 			}
 	if (psRGXKickTA3DIN->ui32ClientTAUpdateCount != 0)
 	{
-		sClientTAUpdateUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClientTAUpdateUFOAddressInt)
+		psClientTAUpdateSyncPrimBlockInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(SYNC_PRIMITIVE_BLOCK *));
+		if (!psClientTAUpdateSyncPrimBlockInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+		hClientTAUpdateSyncPrimBlockInt2 = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_HANDLE));
+		if (!hClientTAUpdateSyncPrimBlockInt2)
 		{
 			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 	
@@ -970,9 +1015,29 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 	}
 
 			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->psClientTAUpdateUFOAddress, psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClientTAUpdateUFOAddressInt, psRGXKickTA3DIN->psClientTAUpdateUFOAddress,
-				psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->phClientTAUpdateSyncPrimBlock, psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hClientTAUpdateSyncPrimBlockInt2, psRGXKickTA3DIN->phClientTAUpdateSyncPrimBlock,
+				psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32ClientTAUpdateCount != 0)
+	{
+		ui32ClientTAUpdateSyncOffsetInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32));
+		if (!ui32ClientTAUpdateSyncOffsetInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->pui32ClientTAUpdateSyncOffset, psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ClientTAUpdateSyncOffsetInt, psRGXKickTA3DIN->pui32ClientTAUpdateSyncOffset,
+				psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
 			{
 				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
@@ -1047,8 +1112,15 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 			}
 	if (psRGXKickTA3DIN->ui32Client3DFenceCount != 0)
 	{
-		sClient3DFenceUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClient3DFenceUFOAddressInt)
+		psClient3DFenceSyncPrimBlockInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(SYNC_PRIMITIVE_BLOCK *));
+		if (!psClient3DFenceSyncPrimBlockInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+		hClient3DFenceSyncPrimBlockInt2 = OSAllocMem(psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_HANDLE));
+		if (!hClient3DFenceSyncPrimBlockInt2)
 		{
 			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 	
@@ -1057,9 +1129,29 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 	}
 
 			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->psClient3DFenceUFOAddress, psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClient3DFenceUFOAddressInt, psRGXKickTA3DIN->psClient3DFenceUFOAddress,
-				psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->phClient3DFenceSyncPrimBlock, psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hClient3DFenceSyncPrimBlockInt2, psRGXKickTA3DIN->phClient3DFenceSyncPrimBlock,
+				psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Client3DFenceCount != 0)
+	{
+		ui32Client3DFenceSyncOffsetInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_UINT32));
+		if (!ui32Client3DFenceSyncOffsetInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->pui32Client3DFenceSyncOffset, psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32Client3DFenceSyncOffsetInt, psRGXKickTA3DIN->pui32Client3DFenceSyncOffset,
+				psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
 			{
 				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
@@ -1087,8 +1179,15 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 			}
 	if (psRGXKickTA3DIN->ui32Client3DUpdateCount != 0)
 	{
-		sClient3DUpdateUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClient3DUpdateUFOAddressInt)
+		psClient3DUpdateSyncPrimBlockInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(SYNC_PRIMITIVE_BLOCK *));
+		if (!psClient3DUpdateSyncPrimBlockInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+		hClient3DUpdateSyncPrimBlockInt2 = OSAllocMem(psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_HANDLE));
+		if (!hClient3DUpdateSyncPrimBlockInt2)
 		{
 			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 	
@@ -1097,9 +1196,29 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 	}
 
 			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->psClient3DUpdateUFOAddress, psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClient3DUpdateUFOAddressInt, psRGXKickTA3DIN->psClient3DUpdateUFOAddress,
-				psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->phClient3DUpdateSyncPrimBlock, psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hClient3DUpdateSyncPrimBlockInt2, psRGXKickTA3DIN->phClient3DUpdateSyncPrimBlock,
+				psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Client3DUpdateCount != 0)
+	{
+		ui32Client3DUpdateSyncOffsetInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32));
+		if (!ui32Client3DUpdateSyncOffsetInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->pui32Client3DUpdateSyncOffset, psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32Client3DUpdateSyncOffsetInt, psRGXKickTA3DIN->pui32Client3DUpdateSyncOffset,
+				psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
 			{
 				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
@@ -1167,26 +1286,6 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->phServer3DSyncs, psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE))
 				|| (OSCopyFromUser(NULL, hServer3DSyncsInt2, psRGXKickTA3DIN->phServer3DSyncs,
 				psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-			{
-				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickTA3D_exit;
-			}
-	if (psRGXKickTA3DIN->ui32NumCheckFenceFDs != 0)
-	{
-		i32CheckFenceFDsInt = OSAllocMem(psRGXKickTA3DIN->ui32NumCheckFenceFDs * sizeof(IMG_INT32));
-		if (!i32CheckFenceFDsInt)
-		{
-			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickTA3D_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->pi32CheckFenceFDs, psRGXKickTA3DIN->ui32NumCheckFenceFDs * sizeof(IMG_INT32))
-				|| (OSCopyFromUser(NULL, i32CheckFenceFDsInt, psRGXKickTA3DIN->pi32CheckFenceFDs,
-				psRGXKickTA3DIN->ui32NumCheckFenceFDs * sizeof(IMG_INT32)) != PVRSRV_OK) )
 			{
 				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
@@ -1272,6 +1371,53 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 
 				goto RGXKickTA3D_exit;
 			}
+	if (psRGXKickTA3DIN->ui32SyncPMRCount != 0)
+	{
+		ui32SyncPMRFlagsInt = OSAllocMem(psRGXKickTA3DIN->ui32SyncPMRCount * sizeof(IMG_UINT32));
+		if (!ui32SyncPMRFlagsInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->pui32SyncPMRFlags, psRGXKickTA3DIN->ui32SyncPMRCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32SyncPMRFlagsInt, psRGXKickTA3DIN->pui32SyncPMRFlags,
+				psRGXKickTA3DIN->ui32SyncPMRCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32SyncPMRCount != 0)
+	{
+		psSyncPMRsInt = OSAllocMem(psRGXKickTA3DIN->ui32SyncPMRCount * sizeof(PMR *));
+		if (!psSyncPMRsInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+		hSyncPMRsInt2 = OSAllocMem(psRGXKickTA3DIN->ui32SyncPMRCount * sizeof(IMG_HANDLE));
+		if (!hSyncPMRsInt2)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickTA3DIN->phSyncPMRs, psRGXKickTA3DIN->ui32SyncPMRCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hSyncPMRsInt2, psRGXKickTA3DIN->phSyncPMRs,
+				psRGXKickTA3DIN->ui32SyncPMRCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
 
 
 
@@ -1292,6 +1438,48 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 	{
 		IMG_UINT32 i;
 
+		for (i=0;i<psRGXKickTA3DIN->ui32ClientTAFenceCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(void **) &psClientTAFenceSyncPrimBlockInt[i],
+											hClientTAFenceSyncPrimBlockInt2[i],
+											PVRSRV_HANDLE_TYPE_SYNC_PRIMITIVE_BLOCK);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psRGXKickTA3DIN->ui32ClientTAUpdateCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(void **) &psClientTAUpdateSyncPrimBlockInt[i],
+											hClientTAUpdateSyncPrimBlockInt2[i],
+											PVRSRV_HANDLE_TYPE_SYNC_PRIMITIVE_BLOCK);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+
 		for (i=0;i<psRGXKickTA3DIN->ui32ServerTASyncPrims;i++)
 		{
 				{
@@ -1301,6 +1489,48 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 											(void **) &psServerTASyncsInt[i],
 											hServerTASyncsInt2[i],
 											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psRGXKickTA3DIN->ui32Client3DFenceCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(void **) &psClient3DFenceSyncPrimBlockInt[i],
+											hClient3DFenceSyncPrimBlockInt2[i],
+											PVRSRV_HANDLE_TYPE_SYNC_PRIMITIVE_BLOCK);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psRGXKickTA3DIN->ui32Client3DUpdateCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(void **) &psClient3DUpdateSyncPrimBlockInt[i],
+											hClient3DUpdateSyncPrimBlockInt2[i],
+											PVRSRV_HANDLE_TYPE_SYNC_PRIMITIVE_BLOCK);
 					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
 					{
 						goto RGXKickTA3D_exit;
@@ -1330,6 +1560,20 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 
 		}
 	}
+
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(void **) &psPRFenceUFOSyncPrimBlockInt,
+											psRGXKickTA3DIN->hPRFenceUFOSyncPrimBlock,
+											PVRSRV_HANDLE_TYPE_SYNC_PRIMITIVE_BLOCK);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
 
 				if (psRGXKickTA3DIN->hRTDataCleanup)
 				{
@@ -1376,31 +1620,56 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 				}
 
 
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psRGXKickTA3DIN->ui32SyncPMRCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(void **) &psSyncPMRsInt[i],
+											hSyncPMRsInt2[i],
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+		}
+	}
+
 	psRGXKickTA3DOUT->eError =
 		PVRSRVRGXKickTA3DKM(
 					psRenderContextInt,
 					psRGXKickTA3DIN->ui32ClientTAFenceCount,
-					sClientTAFenceUFOAddressInt,
+					psClientTAFenceSyncPrimBlockInt,
+					ui32ClientTAFenceSyncOffsetInt,
 					ui32ClientTAFenceValueInt,
 					psRGXKickTA3DIN->ui32ClientTAUpdateCount,
-					sClientTAUpdateUFOAddressInt,
+					psClientTAUpdateSyncPrimBlockInt,
+					ui32ClientTAUpdateSyncOffsetInt,
 					ui32ClientTAUpdateValueInt,
 					psRGXKickTA3DIN->ui32ServerTASyncPrims,
 					ui32ServerTASyncFlagsInt,
 					psServerTASyncsInt,
 					psRGXKickTA3DIN->ui32Client3DFenceCount,
-					sClient3DFenceUFOAddressInt,
+					psClient3DFenceSyncPrimBlockInt,
+					ui32Client3DFenceSyncOffsetInt,
 					ui32Client3DFenceValueInt,
 					psRGXKickTA3DIN->ui32Client3DUpdateCount,
-					sClient3DUpdateUFOAddressInt,
+					psClient3DUpdateSyncPrimBlockInt,
+					ui32Client3DUpdateSyncOffsetInt,
 					ui32Client3DUpdateValueInt,
 					psRGXKickTA3DIN->ui32Server3DSyncPrims,
 					ui32Server3DSyncFlagsInt,
 					psServer3DSyncsInt,
-					psRGXKickTA3DIN->sPRFenceUFOAddress,
+					psPRFenceUFOSyncPrimBlockInt,
+					psRGXKickTA3DIN->ui32FRFenceUFOSyncOffset,
 					psRGXKickTA3DIN->ui32FRFenceValue,
-					psRGXKickTA3DIN->ui32NumCheckFenceFDs,
-					i32CheckFenceFDsInt,
+					psRGXKickTA3DIN->i32CheckFenceFD,
 					psRGXKickTA3DIN->i32UpdateTimelineFD,
 					&psRGXKickTA3DOUT->i32UpdateFenceFD,
 					uiUpdateFenceNameInt,
@@ -1424,18 +1693,29 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32DispatchTableEntry,
 					psRGXKickTA3DIN->bbCommitRefCountsTA,
 					psRGXKickTA3DIN->bbCommitRefCounts3D,
 					&psRGXKickTA3DOUT->bbCommittedRefCountsTA,
-					&psRGXKickTA3DOUT->bbCommittedRefCounts3D);
+					&psRGXKickTA3DOUT->bbCommittedRefCounts3D,
+					psRGXKickTA3DIN->ui32SyncPMRCount,
+					ui32SyncPMRFlagsInt,
+					psSyncPMRsInt);
 
 
 
 
 RGXKickTA3D_exit:
-	if (sClientTAFenceUFOAddressInt)
-		OSFreeMem(sClientTAFenceUFOAddressInt);
+	if (psClientTAFenceSyncPrimBlockInt)
+		OSFreeMem(psClientTAFenceSyncPrimBlockInt);
+	if (hClientTAFenceSyncPrimBlockInt2)
+		OSFreeMem(hClientTAFenceSyncPrimBlockInt2);
+	if (ui32ClientTAFenceSyncOffsetInt)
+		OSFreeMem(ui32ClientTAFenceSyncOffsetInt);
 	if (ui32ClientTAFenceValueInt)
 		OSFreeMem(ui32ClientTAFenceValueInt);
-	if (sClientTAUpdateUFOAddressInt)
-		OSFreeMem(sClientTAUpdateUFOAddressInt);
+	if (psClientTAUpdateSyncPrimBlockInt)
+		OSFreeMem(psClientTAUpdateSyncPrimBlockInt);
+	if (hClientTAUpdateSyncPrimBlockInt2)
+		OSFreeMem(hClientTAUpdateSyncPrimBlockInt2);
+	if (ui32ClientTAUpdateSyncOffsetInt)
+		OSFreeMem(ui32ClientTAUpdateSyncOffsetInt);
 	if (ui32ClientTAUpdateValueInt)
 		OSFreeMem(ui32ClientTAUpdateValueInt);
 	if (ui32ServerTASyncFlagsInt)
@@ -1444,12 +1724,20 @@ RGXKickTA3D_exit:
 		OSFreeMem(psServerTASyncsInt);
 	if (hServerTASyncsInt2)
 		OSFreeMem(hServerTASyncsInt2);
-	if (sClient3DFenceUFOAddressInt)
-		OSFreeMem(sClient3DFenceUFOAddressInt);
+	if (psClient3DFenceSyncPrimBlockInt)
+		OSFreeMem(psClient3DFenceSyncPrimBlockInt);
+	if (hClient3DFenceSyncPrimBlockInt2)
+		OSFreeMem(hClient3DFenceSyncPrimBlockInt2);
+	if (ui32Client3DFenceSyncOffsetInt)
+		OSFreeMem(ui32Client3DFenceSyncOffsetInt);
 	if (ui32Client3DFenceValueInt)
 		OSFreeMem(ui32Client3DFenceValueInt);
-	if (sClient3DUpdateUFOAddressInt)
-		OSFreeMem(sClient3DUpdateUFOAddressInt);
+	if (psClient3DUpdateSyncPrimBlockInt)
+		OSFreeMem(psClient3DUpdateSyncPrimBlockInt);
+	if (hClient3DUpdateSyncPrimBlockInt2)
+		OSFreeMem(hClient3DUpdateSyncPrimBlockInt2);
+	if (ui32Client3DUpdateSyncOffsetInt)
+		OSFreeMem(ui32Client3DUpdateSyncOffsetInt);
 	if (ui32Client3DUpdateValueInt)
 		OSFreeMem(ui32Client3DUpdateValueInt);
 	if (ui32Server3DSyncFlagsInt)
@@ -1458,8 +1746,6 @@ RGXKickTA3D_exit:
 		OSFreeMem(psServer3DSyncsInt);
 	if (hServer3DSyncsInt2)
 		OSFreeMem(hServer3DSyncsInt2);
-	if (i32CheckFenceFDsInt)
-		OSFreeMem(i32CheckFenceFDsInt);
 	if (uiUpdateFenceNameInt)
 		OSFreeMem(uiUpdateFenceNameInt);
 	if (psTACmdInt)
@@ -1468,6 +1754,12 @@ RGXKickTA3D_exit:
 		OSFreeMem(ps3DPRCmdInt);
 	if (ps3DCmdInt)
 		OSFreeMem(ps3DCmdInt);
+	if (ui32SyncPMRFlagsInt)
+		OSFreeMem(ui32SyncPMRFlagsInt);
+	if (psSyncPMRsInt)
+		OSFreeMem(psSyncPMRsInt);
+	if (hSyncPMRsInt2)
+		OSFreeMem(hSyncPMRsInt2);
 
 	return 0;
 }
@@ -1544,7 +1836,8 @@ PVRSRVBridgeRGXGetLastRenderContextResetReason(IMG_UINT32 ui32DispatchTableEntry
 	psRGXGetLastRenderContextResetReasonOUT->eError =
 		PVRSRVRGXGetLastRenderContextResetReasonKM(
 					psRenderContextInt,
-					&psRGXGetLastRenderContextResetReasonOUT->ui32LastResetReason);
+					&psRGXGetLastRenderContextResetReasonOUT->ui32LastResetReason,
+					&psRGXGetLastRenderContextResetReasonOUT->ui32LastResetJobRef);
 
 
 
@@ -1595,460 +1888,13 @@ RGXGetPartialRenderCount_exit:
 	return 0;
 }
 
-static IMG_INT
-PVRSRVBridgeRGXKickSyncTA(IMG_UINT32 ui32DispatchTableEntry,
-					  PVRSRV_BRIDGE_IN_RGXKICKSYNCTA *psRGXKickSyncTAIN,
-					  PVRSRV_BRIDGE_OUT_RGXKICKSYNCTA *psRGXKickSyncTAOUT,
-					 CONNECTION_DATA *psConnection)
-{
-	RGX_SERVER_RENDER_CONTEXT * psRenderContextInt = NULL;
-	PRGXFWIF_UFO_ADDR *sClientTAFenceUFOAddressInt = NULL;
-	IMG_UINT32 *ui32ClientTAFenceValueInt = NULL;
-	PRGXFWIF_UFO_ADDR *sClientTAUpdateUFOAddressInt = NULL;
-	IMG_UINT32 *ui32ClientTAUpdateValueInt = NULL;
-	IMG_UINT32 *ui32ServerTASyncFlagsInt = NULL;
-	SERVER_SYNC_PRIMITIVE * *psServerTASyncsInt = NULL;
-	IMG_HANDLE *hServerTASyncsInt2 = NULL;
-	PRGXFWIF_UFO_ADDR *sClient3DFenceUFOAddressInt = NULL;
-	IMG_UINT32 *ui32Client3DFenceValueInt = NULL;
-	PRGXFWIF_UFO_ADDR *sClient3DUpdateUFOAddressInt = NULL;
-	IMG_UINT32 *ui32Client3DUpdateValueInt = NULL;
-	IMG_UINT32 *ui32Server3DSyncFlagsInt = NULL;
-	SERVER_SYNC_PRIMITIVE * *psServer3DSyncsInt = NULL;
-	IMG_HANDLE *hServer3DSyncsInt2 = NULL;
-	IMG_INT32 *i32CheckFenceFDsInt = NULL;
-	IMG_CHAR *uiUpdateFenceNameInt = NULL;
-
-
-
-
-	if (psRGXKickSyncTAIN->ui32ClientTAFenceCount != 0)
-	{
-		sClientTAFenceUFOAddressInt = OSAllocMem(psRGXKickSyncTAIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClientTAFenceUFOAddressInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->psClientTAFenceUFOAddress, psRGXKickSyncTAIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClientTAFenceUFOAddressInt, psRGXKickSyncTAIN->psClientTAFenceUFOAddress,
-				psRGXKickSyncTAIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32ClientTAFenceCount != 0)
-	{
-		ui32ClientTAFenceValueInt = OSAllocMem(psRGXKickSyncTAIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32));
-		if (!ui32ClientTAFenceValueInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->pui32ClientTAFenceValue, psRGXKickSyncTAIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32))
-				|| (OSCopyFromUser(NULL, ui32ClientTAFenceValueInt, psRGXKickSyncTAIN->pui32ClientTAFenceValue,
-				psRGXKickSyncTAIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32ClientTAUpdateCount != 0)
-	{
-		sClientTAUpdateUFOAddressInt = OSAllocMem(psRGXKickSyncTAIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClientTAUpdateUFOAddressInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->psClientTAUpdateUFOAddress, psRGXKickSyncTAIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClientTAUpdateUFOAddressInt, psRGXKickSyncTAIN->psClientTAUpdateUFOAddress,
-				psRGXKickSyncTAIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32ClientTAUpdateCount != 0)
-	{
-		ui32ClientTAUpdateValueInt = OSAllocMem(psRGXKickSyncTAIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32));
-		if (!ui32ClientTAUpdateValueInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->pui32ClientTAUpdateValue, psRGXKickSyncTAIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32))
-				|| (OSCopyFromUser(NULL, ui32ClientTAUpdateValueInt, psRGXKickSyncTAIN->pui32ClientTAUpdateValue,
-				psRGXKickSyncTAIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32ServerTASyncPrims != 0)
-	{
-		ui32ServerTASyncFlagsInt = OSAllocMem(psRGXKickSyncTAIN->ui32ServerTASyncPrims * sizeof(IMG_UINT32));
-		if (!ui32ServerTASyncFlagsInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->pui32ServerTASyncFlags, psRGXKickSyncTAIN->ui32ServerTASyncPrims * sizeof(IMG_UINT32))
-				|| (OSCopyFromUser(NULL, ui32ServerTASyncFlagsInt, psRGXKickSyncTAIN->pui32ServerTASyncFlags,
-				psRGXKickSyncTAIN->ui32ServerTASyncPrims * sizeof(IMG_UINT32)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32ServerTASyncPrims != 0)
-	{
-		psServerTASyncsInt = OSAllocMem(psRGXKickSyncTAIN->ui32ServerTASyncPrims * sizeof(SERVER_SYNC_PRIMITIVE *));
-		if (!psServerTASyncsInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-		hServerTASyncsInt2 = OSAllocMem(psRGXKickSyncTAIN->ui32ServerTASyncPrims * sizeof(IMG_HANDLE));
-		if (!hServerTASyncsInt2)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->phServerTASyncs, psRGXKickSyncTAIN->ui32ServerTASyncPrims * sizeof(IMG_HANDLE))
-				|| (OSCopyFromUser(NULL, hServerTASyncsInt2, psRGXKickSyncTAIN->phServerTASyncs,
-				psRGXKickSyncTAIN->ui32ServerTASyncPrims * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32Client3DFenceCount != 0)
-	{
-		sClient3DFenceUFOAddressInt = OSAllocMem(psRGXKickSyncTAIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClient3DFenceUFOAddressInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->psClient3DFenceUFOAddress, psRGXKickSyncTAIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClient3DFenceUFOAddressInt, psRGXKickSyncTAIN->psClient3DFenceUFOAddress,
-				psRGXKickSyncTAIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32Client3DFenceCount != 0)
-	{
-		ui32Client3DFenceValueInt = OSAllocMem(psRGXKickSyncTAIN->ui32Client3DFenceCount * sizeof(IMG_UINT32));
-		if (!ui32Client3DFenceValueInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->pui32Client3DFenceValue, psRGXKickSyncTAIN->ui32Client3DFenceCount * sizeof(IMG_UINT32))
-				|| (OSCopyFromUser(NULL, ui32Client3DFenceValueInt, psRGXKickSyncTAIN->pui32Client3DFenceValue,
-				psRGXKickSyncTAIN->ui32Client3DFenceCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32Client3DUpdateCount != 0)
-	{
-		sClient3DUpdateUFOAddressInt = OSAllocMem(psRGXKickSyncTAIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR));
-		if (!sClient3DUpdateUFOAddressInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->psClient3DUpdateUFOAddress, psRGXKickSyncTAIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR))
-				|| (OSCopyFromUser(NULL, sClient3DUpdateUFOAddressInt, psRGXKickSyncTAIN->psClient3DUpdateUFOAddress,
-				psRGXKickSyncTAIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32Client3DUpdateCount != 0)
-	{
-		ui32Client3DUpdateValueInt = OSAllocMem(psRGXKickSyncTAIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32));
-		if (!ui32Client3DUpdateValueInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->pui32Client3DUpdateValue, psRGXKickSyncTAIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32))
-				|| (OSCopyFromUser(NULL, ui32Client3DUpdateValueInt, psRGXKickSyncTAIN->pui32Client3DUpdateValue,
-				psRGXKickSyncTAIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32Server3DSyncPrims != 0)
-	{
-		ui32Server3DSyncFlagsInt = OSAllocMem(psRGXKickSyncTAIN->ui32Server3DSyncPrims * sizeof(IMG_UINT32));
-		if (!ui32Server3DSyncFlagsInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->pui32Server3DSyncFlags, psRGXKickSyncTAIN->ui32Server3DSyncPrims * sizeof(IMG_UINT32))
-				|| (OSCopyFromUser(NULL, ui32Server3DSyncFlagsInt, psRGXKickSyncTAIN->pui32Server3DSyncFlags,
-				psRGXKickSyncTAIN->ui32Server3DSyncPrims * sizeof(IMG_UINT32)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32Server3DSyncPrims != 0)
-	{
-		psServer3DSyncsInt = OSAllocMem(psRGXKickSyncTAIN->ui32Server3DSyncPrims * sizeof(SERVER_SYNC_PRIMITIVE *));
-		if (!psServer3DSyncsInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-		hServer3DSyncsInt2 = OSAllocMem(psRGXKickSyncTAIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE));
-		if (!hServer3DSyncsInt2)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->phServer3DSyncs, psRGXKickSyncTAIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE))
-				|| (OSCopyFromUser(NULL, hServer3DSyncsInt2, psRGXKickSyncTAIN->phServer3DSyncs,
-				psRGXKickSyncTAIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	if (psRGXKickSyncTAIN->ui32NumCheckFenceFDs != 0)
-	{
-		i32CheckFenceFDsInt = OSAllocMem(psRGXKickSyncTAIN->ui32NumCheckFenceFDs * sizeof(IMG_INT32));
-		if (!i32CheckFenceFDsInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->pi32CheckFenceFDs, psRGXKickSyncTAIN->ui32NumCheckFenceFDs * sizeof(IMG_INT32))
-				|| (OSCopyFromUser(NULL, i32CheckFenceFDsInt, psRGXKickSyncTAIN->pi32CheckFenceFDs,
-				psRGXKickSyncTAIN->ui32NumCheckFenceFDs * sizeof(IMG_INT32)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-	
-	{
-		uiUpdateFenceNameInt = OSAllocMem(32 * sizeof(IMG_CHAR));
-		if (!uiUpdateFenceNameInt)
-		{
-			psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-	
-			goto RGXKickSyncTA_exit;
-		}
-	}
-
-			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (void*) psRGXKickSyncTAIN->puiUpdateFenceName, 32 * sizeof(IMG_CHAR))
-				|| (OSCopyFromUser(NULL, uiUpdateFenceNameInt, psRGXKickSyncTAIN->puiUpdateFenceName,
-				32 * sizeof(IMG_CHAR)) != PVRSRV_OK) )
-			{
-				psRGXKickSyncTAOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-				goto RGXKickSyncTA_exit;
-			}
-
-
-
-				{
-					/* Look up the address from the handle */
-					psRGXKickSyncTAOUT->eError =
-						PVRSRVLookupHandle(psConnection->psHandleBase,
-											(void **) &psRenderContextInt,
-											psRGXKickSyncTAIN->hRenderContext,
-											PVRSRV_HANDLE_TYPE_RGX_SERVER_RENDER_CONTEXT);
-					if(psRGXKickSyncTAOUT->eError != PVRSRV_OK)
-					{
-						goto RGXKickSyncTA_exit;
-					}
-				}
-
-
-	{
-		IMG_UINT32 i;
-
-		for (i=0;i<psRGXKickSyncTAIN->ui32ServerTASyncPrims;i++)
-		{
-				{
-					/* Look up the address from the handle */
-					psRGXKickSyncTAOUT->eError =
-						PVRSRVLookupHandle(psConnection->psHandleBase,
-											(void **) &psServerTASyncsInt[i],
-											hServerTASyncsInt2[i],
-											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-					if(psRGXKickSyncTAOUT->eError != PVRSRV_OK)
-					{
-						goto RGXKickSyncTA_exit;
-					}
-				}
-
-		}
-	}
-
-	{
-		IMG_UINT32 i;
-
-		for (i=0;i<psRGXKickSyncTAIN->ui32Server3DSyncPrims;i++)
-		{
-				{
-					/* Look up the address from the handle */
-					psRGXKickSyncTAOUT->eError =
-						PVRSRVLookupHandle(psConnection->psHandleBase,
-											(void **) &psServer3DSyncsInt[i],
-											hServer3DSyncsInt2[i],
-											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-					if(psRGXKickSyncTAOUT->eError != PVRSRV_OK)
-					{
-						goto RGXKickSyncTA_exit;
-					}
-				}
-
-		}
-	}
-
-	psRGXKickSyncTAOUT->eError =
-		PVRSRVRGXKickSyncTAKM(
-					psRenderContextInt,
-					psRGXKickSyncTAIN->ui32ClientTAFenceCount,
-					sClientTAFenceUFOAddressInt,
-					ui32ClientTAFenceValueInt,
-					psRGXKickSyncTAIN->ui32ClientTAUpdateCount,
-					sClientTAUpdateUFOAddressInt,
-					ui32ClientTAUpdateValueInt,
-					psRGXKickSyncTAIN->ui32ServerTASyncPrims,
-					ui32ServerTASyncFlagsInt,
-					psServerTASyncsInt,
-					psRGXKickSyncTAIN->ui32Client3DFenceCount,
-					sClient3DFenceUFOAddressInt,
-					ui32Client3DFenceValueInt,
-					psRGXKickSyncTAIN->ui32Client3DUpdateCount,
-					sClient3DUpdateUFOAddressInt,
-					ui32Client3DUpdateValueInt,
-					psRGXKickSyncTAIN->ui32Server3DSyncPrims,
-					ui32Server3DSyncFlagsInt,
-					psServer3DSyncsInt,
-					psRGXKickSyncTAIN->ui32NumCheckFenceFDs,
-					i32CheckFenceFDsInt,
-					psRGXKickSyncTAIN->i32UpdateTimelineFD,
-					&psRGXKickSyncTAOUT->i32UpdateFenceFD,
-					uiUpdateFenceNameInt,
-					psRGXKickSyncTAIN->bbPDumpContinuous);
-
-
-
-
-RGXKickSyncTA_exit:
-	if (sClientTAFenceUFOAddressInt)
-		OSFreeMem(sClientTAFenceUFOAddressInt);
-	if (ui32ClientTAFenceValueInt)
-		OSFreeMem(ui32ClientTAFenceValueInt);
-	if (sClientTAUpdateUFOAddressInt)
-		OSFreeMem(sClientTAUpdateUFOAddressInt);
-	if (ui32ClientTAUpdateValueInt)
-		OSFreeMem(ui32ClientTAUpdateValueInt);
-	if (ui32ServerTASyncFlagsInt)
-		OSFreeMem(ui32ServerTASyncFlagsInt);
-	if (psServerTASyncsInt)
-		OSFreeMem(psServerTASyncsInt);
-	if (hServerTASyncsInt2)
-		OSFreeMem(hServerTASyncsInt2);
-	if (sClient3DFenceUFOAddressInt)
-		OSFreeMem(sClient3DFenceUFOAddressInt);
-	if (ui32Client3DFenceValueInt)
-		OSFreeMem(ui32Client3DFenceValueInt);
-	if (sClient3DUpdateUFOAddressInt)
-		OSFreeMem(sClient3DUpdateUFOAddressInt);
-	if (ui32Client3DUpdateValueInt)
-		OSFreeMem(ui32Client3DUpdateValueInt);
-	if (ui32Server3DSyncFlagsInt)
-		OSFreeMem(ui32Server3DSyncFlagsInt);
-	if (psServer3DSyncsInt)
-		OSFreeMem(psServer3DSyncsInt);
-	if (hServer3DSyncsInt2)
-		OSFreeMem(hServer3DSyncsInt2);
-	if (i32CheckFenceFDsInt)
-		OSFreeMem(i32CheckFenceFDsInt);
-	if (uiUpdateFenceNameInt)
-		OSFreeMem(uiUpdateFenceNameInt);
-
-	return 0;
-}
-
 
 
 /* *************************************************************************** 
  * Server bridge dispatch related glue 
  */
 
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitRGXTA3DBridge(void);
 PVRSRV_ERROR DeinitRGXTA3DBridge(void);
@@ -2060,80 +1906,58 @@ PVRSRV_ERROR InitRGXTA3DBridge(void)
 {
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXCREATEHWRTDATA, PVRSRVBridgeRGXCreateHWRTData,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYHWRTDATA, PVRSRVBridgeRGXDestroyHWRTData,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXCREATERENDERTARGET, PVRSRVBridgeRGXCreateRenderTarget,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYRENDERTARGET, PVRSRVBridgeRGXDestroyRenderTarget,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXCREATEZSBUFFER, PVRSRVBridgeRGXCreateZSBuffer,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYZSBUFFER, PVRSRVBridgeRGXDestroyZSBuffer,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXPOPULATEZSBUFFER, PVRSRVBridgeRGXPopulateZSBuffer,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXUNPOPULATEZSBUFFER, PVRSRVBridgeRGXUnpopulateZSBuffer,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXCREATEFREELIST, PVRSRVBridgeRGXCreateFreeList,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYFREELIST, PVRSRVBridgeRGXDestroyFreeList,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXADDBLOCKTOFREELIST, PVRSRVBridgeRGXAddBlockToFreeList,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXREMOVEBLOCKFROMFREELIST, PVRSRVBridgeRGXRemoveBlockFromFreeList,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXCREATERENDERCONTEXT, PVRSRVBridgeRGXCreateRenderContext,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYRENDERCONTEXT, PVRSRVBridgeRGXDestroyRenderContext,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXKICKTA3D, PVRSRVBridgeRGXKickTA3D,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXSETRENDERCONTEXTPRIORITY, PVRSRVBridgeRGXSetRenderContextPriority,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXGETLASTRENDERCONTEXTRESETREASON, PVRSRVBridgeRGXGetLastRenderContextResetReason,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXGETPARTIALRENDERCOUNT, PVRSRVBridgeRGXGetPartialRenderCount,
-					NULL, NULL,
-					0, 0);
-
-	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D, PVRSRV_BRIDGE_RGXTA3D_RGXKICKSYNCTA, PVRSRVBridgeRGXKickSyncTA,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;

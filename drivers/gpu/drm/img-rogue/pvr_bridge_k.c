@@ -66,7 +66,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "srvcore.h"
 #include "common_srvcore_bridge.h"
-#include "cache_defines.h"
 
 #if defined(MODULE_TEST)
 /************************************************************************/
@@ -154,11 +153,11 @@ PVRSRV_ERROR InitREGCONFIGBridge(void);
 PVRSRV_ERROR DeinitREGCONFIGBridge(void);
 PVRSRV_ERROR InitTIMERQUERYBridge(void);
 PVRSRV_ERROR DeinitTIMERQUERYBridge(void);
+PVRSRV_ERROR InitRGXKICKSYNCBridge(void);
+PVRSRV_ERROR DeinitRGXKICKSYNCBridge(void);
 #endif /* SUPPORT_RGX */
-#if (CACHEFLUSH_TYPE == CACHEFLUSH_GENERIC)
 PVRSRV_ERROR InitCACHEGENERICBridge(void);
 PVRSRV_ERROR DeinitCACHEGENERICBridge(void);
-#endif
 #if defined(SUPPORT_SECURE_EXPORT)
 PVRSRV_ERROR InitSMMBridge(void);
 PVRSRV_ERROR DeinitSMMBridge(void);
@@ -285,13 +284,11 @@ LinuxBridgeInit(void)
 	}
 #endif
 
-#if (CACHEFLUSH_TYPE == CACHEFLUSH_GENERIC)
 	eError = InitCACHEGENERICBridge();
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
 	}
-#endif
 
 #if defined(SUPPORT_SECURE_EXPORT)
 	eError = InitSMMBridge();
@@ -418,6 +415,13 @@ LinuxBridgeInit(void)
 		return eError;
 	}
 
+	eError = InitRGXKICKSYNCBridge();
+	if (eError != PVRSRV_OK)
+	{
+		return eError;
+	}
+
+
 #endif /* SUPPORT_RGX */
 
 	return eError;
@@ -520,13 +524,11 @@ LinuxBridgeDeInit(void)
 	}
 #endif
 
-#if (CACHEFLUSH_TYPE == CACHEFLUSH_GENERIC)
 	eError = DeinitCACHEGENERICBridge();
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
 	}
-#endif
 
 #if defined(SUPPORT_SECURE_EXPORT)
 	eError = DeinitSMMBridge();
@@ -637,6 +639,13 @@ LinuxBridgeDeInit(void)
 		return eError;
 	}
 
+	eError = DeinitRGXKICKSYNCBridge();
+	if (eError != PVRSRV_OK)
+	{
+		return eError;
+	}
+
+
 #endif /* SUPPORT_RGX */
 
 	return eError;
@@ -742,7 +751,7 @@ int
 PVRSRV_BridgeDispatchKM(struct drm_device unref__ *dev, void *arg, struct drm_file *pDRMFile)
 #else
 long
-PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsigned long arg)
+PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int ioctlCmd, unsigned long arg)
 #endif
 {
 #if defined(SUPPORT_DRM)
@@ -777,9 +786,6 @@ PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsig
 		return -EFAULT;
 	}
 	
-	/* FIXME - Currently the CopyFromUserWrapper which collects stats about
-	 * how much data is shifted to/from userspace isn't available to us
-	 * here. */
 	if (OSCopyFromUser(NULL,
 					  psBridgePackageKM,
 					  psBridgePackageUM,
@@ -787,6 +793,14 @@ PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsig
 	  != PVRSRV_OK)
 	{
 		return -EFAULT;
+	}
+
+	if (PVRSRV_GET_BRIDGE_ID(ioctlCmd) != psBridgePackageKM->ui32BridgeID ||
+	    psBridgePackageKM->ui32Size != sizeof(PVRSRV_BRIDGE_PACKAGE))
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Inconsistent data passed from user space",
+				__FUNCTION__));
+		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
 #endif
 
@@ -814,8 +828,8 @@ int
 long
 #endif
 PVRSRV_BridgeCompatDispatchKM(struct file *pFile,
-							  unsigned int unref__ ioctlCmd,
-							  unsigned long arg)
+                              unsigned int ioctlCmd,
+                              unsigned long arg)
 {
 	struct bridge_package_from_32
 	{
@@ -840,7 +854,7 @@ PVRSRV_BridgeCompatDispatchKM(struct file *pFile,
 	}
 
 	/* make sure there is no padding inserted by compiler */
-	PVR_ASSERT(sizeof(struct bridge_package_from_32) == 7 * sizeof(IMG_UINT32));
+	BUILD_BUG_ON(sizeof(struct bridge_package_from_32) != 7 * sizeof(IMG_UINT32));
 
 	if(!OSAccessOK(PVR_VERIFY_READ, (void *) arg,
 				   sizeof(struct bridge_package_from_32)))
@@ -858,7 +872,17 @@ PVRSRV_BridgeCompatDispatchKM(struct file *pFile,
 		return -EFAULT;
 	}
 
-	PVR_ASSERT(params_addr->size == sizeof(struct bridge_package_from_32));
+#if defined(SUPPORT_DRM)
+	if (params_addr->size != sizeof(struct bridge_package_from_32))
+#else
+	if (PVRSRV_GET_BRIDGE_ID(ioctlCmd) != PVRSRV_GET_BRIDGE_ID(params_addr->bridge_id) ||
+	    params_addr->size != sizeof(struct bridge_package_from_32))
+#endif
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Inconsistent data passed from user space",
+		        __FUNCTION__));
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
 
 	params_for_64.ui32BridgeID = PVRSRV_GET_BRIDGE_ID(params_addr->bridge_id);
 	params_for_64.ui32FunctionID = params_addr->function_id;
@@ -876,6 +900,7 @@ int
 PVRSRV_MMap(struct file *pFile, struct vm_area_struct *ps_vma)
 {
 	CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile);
+	IMG_HANDLE hSecurePMRHandle = (IMG_HANDLE)((uintptr_t)ps_vma->vm_pgoff);
 	PMR *psPMR;
 	PVRSRV_ERROR eError;
 
@@ -894,21 +919,13 @@ PVRSRV_MMap(struct file *pFile, struct vm_area_struct *ps_vma)
 	mutex_lock(&g_sMMapMutex);
 	PMRLock();
 
-#if defined(SUPPORT_DRM_DC_MODULE)
-	psPMR = PVRSRVGEMMMapLookupPMR(pFile, ps_vma);
-	if (!psPMR)
-#endif
+	eError = PVRSRVLookupHandle(psConnection->psHandleBase,
+								(void **)&psPMR,
+								hSecurePMRHandle,
+								PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+	if (eError != PVRSRV_OK)
 	{
-		IMG_HANDLE hSecurePMRHandle = (IMG_HANDLE)((uintptr_t)ps_vma->vm_pgoff);
-
-		eError = PVRSRVLookupHandle(psConnection->psHandleBase,
-									(void **)&psPMR,
-									hSecurePMRHandle,
-									PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if (eError != PVRSRV_OK)
-		{
-			goto e0;
-		}
+		goto e0;
 	}
 
 	/*

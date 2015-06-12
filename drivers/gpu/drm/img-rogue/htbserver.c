@@ -91,6 +91,8 @@ typedef struct
 
 	HTB_LOGMODE_CTRL eLogMode;      /*!< Logging mode control */
 
+	IMG_BOOL bLogDropSignalled;     /*!< Flag indicating if a log message has
+                                         been signalled as dropped */
 
 	/* synchronisation parameters */
 	IMG_UINT64 ui64SyncOSTS;
@@ -106,9 +108,9 @@ typedef struct
 static const IMG_UINT32 MapFlags[] =
 {
 	0,                          /* HTB_OPMODE_UNDEF = 0 */
-	TL_FLAG_DROP_DATA,          /* HTB_OPMODE_DROPLATEST */
+	TL_FLAG_RESERVE_DROP_NEWER, /* HTB_OPMODE_DROPLATEST */
 	0,                          /* HTB_OPMODE_DROPOLDEST */
-	TL_FLAG_BLOCKING_RESERVE    /* HTB_OPMODE_BLOCK */
+	TL_FLAG_RESERVE_BLOCK       /* HTB_OPMODE_BLOCK */
 };
 
 static_assert(0 == HTB_OPMODE_UNDEF,      "Unexpected value for HTB_OPMODE_UNDEF");
@@ -204,6 +206,7 @@ HTBConfigureKM(
 		g_sCtrl.ui32PIDCount = 0;
 		g_sCtrl.ui32PIDHead = 0;
 		g_sCtrl.eLogMode = HTB_LOGMODE_ALLPID;
+		g_sCtrl.bLogDropSignalled = IMG_FALSE;
 	}
 	else
 	{
@@ -380,14 +383,20 @@ HTBSyncPartitionMarker(
 		PVRSRV_ERROR eError;
 		IMG_UINT32 ui32Time = OSClockus();
 		eError = HTBLog(0, 0, ui32Time, HTB_SF_CTRL_FWSYNC_MARK, ui32Marker);
-		PVR_LOG_IF_ERROR( eError, "HTBLog" );
+		if (PVRSRV_OK != eError)
+		{
+			PVR_DPF((PVR_DBG_WARNING, "%s() failed (%s) in %s()", "HTBLog", PVRSRVGETERRORSTRING(eError), __func__));
+		}
 		if (0 != g_sCtrl.ui32SyncCalcClkSpd)
 		{
 			eError = HTBLog(0, 0, ui32Time, HTB_SF_CTRL_FWSYNC_SCALE,
 					((IMG_UINT32)((g_sCtrl.ui64SyncOSTS>>32)&0xffffffff)), ((IMG_UINT32)(g_sCtrl.ui64SyncOSTS&0xffffffff)),
 					((IMG_UINT32)((g_sCtrl.ui64SyncCRTS>>32)&0xffffffff)), ((IMG_UINT32)(g_sCtrl.ui64SyncCRTS&0xffffffff)),
 					g_sCtrl.ui32SyncCalcClkSpd);
-			PVR_LOG_IF_ERROR( eError, "HTBLog");
+			if (PVRSRV_OK != eError)
+			{
+				PVR_DPF((PVR_DBG_WARNING, "%s() failed (%s) in %s()", "HTBLog", PVRSRVGETERRORSTRING(eError), __func__));
+			}
 		}
 	}
 }
@@ -427,7 +436,7 @@ HTBSyncScale(
 				((IMG_UINT32)((ui64OSTS>>32)&0xffffffff)), ((IMG_UINT32)(ui64OSTS&0xffffffff)),
 				((IMG_UINT32)((ui64CRTS>>32)&0xffffffff)), ((IMG_UINT32)(ui64CRTS&0xffffffff)),
 				ui32CalcClkSpd);
-		PVR_LOG_IF_ERROR( eError, "HTBLog" );
+		PVR_DPF((PVR_DBG_WARNING, "%s() failed (%s) in %s()", "HTBLog", PVRSRVGETERRORSTRING(eError), __func__));
 	}
 }
 
@@ -492,7 +501,19 @@ HTBLogKM(
 			OSReleaseThreadQuanta();
 			eError = TLStreamWrite( g_hTLStream, (IMG_UINT8*)aui32MessageBuffer, ui32MessageSize );
 		}
-		PVR_LOG_IF_ERROR( eError, "TLStreamWrite");
+
+		if ( PVRSRV_OK == eError )
+		{
+			g_sCtrl.bLogDropSignalled = IMG_FALSE;
+		}
+		else if ( PVRSRV_ERROR_STREAM_RESERVE_TOO_BIG != eError || !g_sCtrl.bLogDropSignalled )
+		{
+			PVR_DPF((PVR_DBG_WARNING, "%s() failed (%s) in %s()", "TLStreamWrite", PVRSRVGETERRORSTRING(eError), __func__));
+		}
+		if ( PVRSRV_ERROR_STREAM_RESERVE_TOO_BIG == eError )
+		{
+			g_sCtrl.bLogDropSignalled = IMG_TRUE;
+		}
 	}
 
 	return eError;

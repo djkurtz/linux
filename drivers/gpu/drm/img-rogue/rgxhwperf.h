@@ -70,10 +70,11 @@ void RGXHWPerfDeinit(void);
  *****************************************************************************/
 
 PVRSRV_ERROR PVRSRVRGXCtrlHWPerfKM(
-	CONNECTION_DATA    * psConnection,
-	PVRSRV_DEVICE_NODE * psDeviceNode,
-	IMG_BOOL           bToggle,
-	IMG_UINT64         ui64Mask);
+	CONNECTION_DATA      * psConnection,
+	PVRSRV_DEVICE_NODE   * psDeviceNode,
+	 RGX_HWPERF_STREAM_ID  eStreamId,
+	IMG_BOOL               bToggle,
+	IMG_UINT64             ui64Mask);
 
 
 PVRSRV_ERROR PVRSRVRGXConfigEnableHWPerfCountersKM(
@@ -95,6 +96,44 @@ PVRSRV_ERROR PVRSRVRGXConfigCustomCountersKM(
 	IMG_UINT16           ui16CustomBlockID,
 	IMG_UINT16           ui16NumCustomCounters,
 	IMG_UINT32         * pui32CustomCounterIDs);
+
+/******************************************************************************
+ * RGX HW Performance Host Stream API
+ *****************************************************************************/
+
+PVRSRV_ERROR RGXHWPerfHostInit(void);
+PVRSRV_ERROR RGXHWPerfHostInitOnDemandResources(void);
+void RGXHWPerfHostDeInit(void);
+void RGXHWPerfHostSetEventFilter(IMG_UINT32 ui32Filter);
+
+void RGXHWPerfHostPostEnqEvent(const RGX_HWPERF_HOST_ENQ_KICK_TYPE ui32EnqType,
+                               const IMG_UINT32 ui32Pid,
+                               const IMG_UINT32 ui32ExtJobRef,
+                               const IMG_UINT32 ui32IntJobRef);
+
+#define __RGX_HWPERF_HOST_EN(CTX) \
+		(((PVRSRV_RGXDEV_INFO *)CTX->psDeviceNode->pvDevice)->bHWPerfHostEnabled == IMG_TRUE)
+#define __RGX_HWPERF_HOST_FILTER(CTX, EV) \
+		(((PVRSRV_RGXDEV_INFO *)CTX->psDeviceNode->pvDevice)->ui32HWPerfHostFilter \
+		& RGX_HWPERF_EVENT_MASK_VALUE(EV))
+
+/**
+ * This macro checks if HWPerfHost and the event are enabled and if they are
+ * it posts event to the HWPerfHost stream.
+ *
+ * @param C context
+ * @param P process id (PID)
+ * @param E ExtJobRef
+ * @param I IntJobRef
+ * @param K kick type
+ */
+#define RGX_HWPERF_HOST_ENQ(C, P, E, I, K) \
+		do { \
+			if (__RGX_HWPERF_HOST_EN(C) && __RGX_HWPERF_HOST_FILTER(C, RGX_HWPERF_HOST_ENQ)) \
+			{ \
+				RGXHWPerfHostPostEnqEvent((K), (P), (E), (I)); \
+			} \
+		} while (0)
 
 /******************************************************************************
  * RGX HW Performance To FTrace Profiling API(s)

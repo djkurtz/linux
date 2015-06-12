@@ -49,7 +49,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /* include/ */
 #include "pvrsrv_error.h"
-#include "services.h"
 
 
 #if defined(__KERNEL__) && defined(ANDROID) && !defined(__GENKSYMS__)
@@ -88,6 +87,8 @@ extern IMG_UINT32 g_ui32EveryLineCounter;
 typedef struct _PDUMP_CONNECTION_DATA_ PDUMP_CONNECTION_DATA;
 typedef PVRSRV_ERROR (*PFN_PDUMP_TRANSITION)(void **pvData, IMG_BOOL bInto, IMG_BOOL bContinuous);
 
+#ifdef PDUMP
+
 /*! Macro used to record a panic in the PDump script stream */
 #define PDUMP_PANIC(_type, _id, _msg) do \
 		{ PVRSRV_ERROR _eE;\
@@ -96,7 +97,12 @@ typedef PVRSRV_ERROR (*PFN_PDUMP_TRANSITION)(void **pvData, IMG_BOOL bInto, IMG_
 		MSC_SUPPRESS_4127\
 		} while (0)
 
-#ifdef PDUMP
+/*! Macro used to record a driver error in the PDump script stream to invalidate the capture */
+#define PDUMP_ERROR(_err, _msg) do \
+		{   (void) PDumpCaptureError((_err), (_msg), __FUNCTION__, __LINE__);\
+		MSC_SUPPRESS_4127\
+		} while (0)
+
 	/* Shared across pdump_x files */
 	PVRSRV_ERROR PDumpInitCommon(void);
 	void PDumpDeInitCommon(void);
@@ -106,13 +112,13 @@ typedef PVRSRV_ERROR (*PFN_PDUMP_TRANSITION)(void **pvData, IMG_BOOL bInto, IMG_
 									const IMG_CHAR **ppszZeroPageFilename);
 
 	void PDumpConnectionNotify(void);
+	void PDumpDisconnectionNotify(void);
 
-	PVRSRV_ERROR PDumpStartInitPhaseKM(void);
-	PVRSRV_ERROR PDumpStopInitPhaseKM(IMG_MODULE_ID eModuleID);
-PVRSRV_ERROR PDumpSetFrameKM(CONNECTION_DATA *psConnection,
+	void PDumpStopInitPhase(IMG_BOOL bPDumpClient, IMG_BOOL bInitClient);
+	PVRSRV_ERROR PDumpSetFrameKM(CONNECTION_DATA *psConnection,
                              PVRSRV_DEVICE_NODE * psDeviceNode,
                              IMG_UINT32 ui32Frame);
-PVRSRV_ERROR PDumpGetFrameKM(CONNECTION_DATA *psConnection,
+	PVRSRV_ERROR PDumpGetFrameKM(CONNECTION_DATA *psConnection,
                              PVRSRV_DEVICE_NODE * psDeviceNode,
                              IMG_UINT32* pui32Frame);
 	PVRSRV_ERROR PDumpCommentKM(IMG_CHAR *pszComment, IMG_UINT32 ui32Flags);
@@ -195,12 +201,6 @@ PVRSRV_ERROR PDumpGetFrameKM(CONNECTION_DATA *psConnection,
                                                 IMG_CHAR *pszInternalVar,
                                                 IMG_UINT32 ui32Flags);
 
-	PVRSRV_ERROR PDumpLDW(IMG_CHAR      *pcBuffer,
-	                      IMG_CHAR      *pszDevSpaceName,
-	                      IMG_UINT32    ui32OffsetBytes,
-	                      IMG_UINT32    ui32NumLoadBytes,
-	                      PDUMP_FLAGS_T uiPDumpFlags);
-
 	PVRSRV_ERROR PDumpSAW(IMG_CHAR      *pszDevSpaceName,
 	                      IMG_UINT32    ui32HPOffsetBytes,
 	                      IMG_UINT32    ui32NumSaveBytes,
@@ -235,7 +235,6 @@ PVRSRV_ERROR PDumpGetFrameKM(CONNECTION_DATA *psConnection,
 										   IMG_UINT32 ui32Size,
 										   IMG_UINT32 ui32PDumpFlags);
 
-	PVRSRV_ERROR PDumpComment(IMG_CHAR* pszFormat, ...) IMG_FORMAT_PRINTF(1, 2);
 	PVRSRV_ERROR PDumpCommentWithFlags(IMG_UINT32	ui32Flags,
 									   IMG_CHAR*	pszFormat,
 									   ...) IMG_FORMAT_PRINTF(2, 3);
@@ -244,6 +243,11 @@ PVRSRV_ERROR PDumpGetFrameKM(CONNECTION_DATA *psConnection,
 							IMG_CHAR*       pszPanicMsg,
 							const IMG_CHAR* pszPPFunc,
 							IMG_UINT32      ui32PPline);
+
+	PVRSRV_ERROR PDumpCaptureError(PVRSRV_ERROR    ui32ErrorNo,
+	                               IMG_CHAR*       pszErrorMsg,
+	                               const IMG_CHAR* pszPPFunc,
+	                               IMG_UINT32      ui32PPline);
 
 	PVRSRV_ERROR PDumpPDReg(PDUMP_MMU_ATTRIB *psMMUAttrib,
 							IMG_UINT32	ui32Reg,
@@ -312,8 +316,8 @@ PVRSRV_ERROR PDumpGetFrameKM(CONNECTION_DATA *psConnection,
 
 	PVRSRV_ERROR PDumpCreateLockKM(void);
 	void PDumpDestroyLockKM(void);
-	void PDumpLockKM(void);
-	void PDumpUnlockKM(void);
+	void PDumpLock(void);
+	void PDumpUnlock(void);
 
 	/*
 	    Process persistence common API for use by common
@@ -436,8 +440,8 @@ PVRSRV_ERROR PdumpInvalidateMipsTLB(PMR *psPMRDest,
 
 
 
-	#define PDUMP_LOCK				PDumpLockKM
-	#define PDUMP_UNLOCK			PDumpUnlockKM
+	#define PDUMP_LOCK				PDumpLock
+	#define PDUMP_UNLOCK			PDumpUnlock
 
 	#define PDUMPINIT				PDumpInitCommon
 	#define PDUMPDEINIT				PDumpDeInitCommon
@@ -445,7 +449,7 @@ PVRSRV_ERROR PdumpInvalidateMipsTLB(PMR *psPMRDest,
 	#define PDUMPREG64				PDumpReg64
 	#define PDUMPREGREAD32			PDumpRegRead32
 	#define PDUMPREGREAD64			PDumpRegRead64
-	#define PDUMPCOMMENT			PDumpComment
+	#define PDUMPCOMMENT(...)		PDumpCommentWithFlags(PDUMP_FLAGS_CONTINUOUS, __VA_ARGS__)
 	#define PDUMPCOMMENTWITHFLAGS	PDumpCommentWithFlags
 	#define PDUMPREGPOL				PDumpRegPolKM
 	#define PDUMPSETMMUCONTEXT		PDumpSetMMUContext
@@ -453,7 +457,7 @@ PVRSRV_ERROR PdumpInvalidateMipsTLB(PMR *psPMRDest,
 	#define PDUMPPDREG				PDumpPDReg
 	#define PDUMPPDREGWITHFLAGS		PDumpPDRegWithFlags
 	#define PDUMPREGBASEDCBP		PDumpRegBasedCBP
-	#define PDUMPENDINITPHASE		PDumpStopInitPhaseKM
+	#define PDUMPENDINITPHASE		PDumpStopInitPhase
 	#define PDUMPIDLWITHFLAGS		PDumpIDLWithFlags
 	#define PDUMPIDL				PDumpIDL
 	#define PDUMPPOWCMDSTART		PDumpPowerTransitionStart
@@ -468,6 +472,11 @@ PVRSRV_ERROR PdumpInvalidateMipsTLB(PMR *psPMRDest,
 		across the bridge as this looks rather unblanced
 	*/
 
+/*! Macro used to record a panic in the PDump script stream */
+#define PDUMP_PANIC(_type, _id, _msg)  ((void)0);
+
+/*! Macro used to record a driver error in the PDump script stream to invalidate the capture */
+#define PDUMP_ERROR(_err, _msg) ((void)0);
 
 #ifdef INLINE_IS_PRAGMA
 #pragma inline(PDumpInitCommon)
@@ -487,6 +496,14 @@ PDumpConnectionNotify(void)
 	return;
 }
 
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpDisconnectionNotify)
+#endif
+static INLINE void
+PDumpDisconnectionNotify(void)
+{
+	return;
+}
 
 #ifdef INLINE_IS_PRAGMA
 #pragma inline(PDumpCreateLockKM)
@@ -506,18 +523,18 @@ PDumpDestroyLockKM(void)
 }
 
 #ifdef INLINE_IS_PRAGMA
-#pragma inline(PDumpLockKM)
+#pragma inline(PDumpLock)
 #endif
 static INLINE void
-PDumpLockKM(void)
+PDumpLock(void)
 {
 }
 
 #ifdef INLINE_IS_PRAGMA
-#pragma inline(PDumpUnlockKM)
+#pragma inline(PDumpUnlock)
 #endif
 static INLINE void
-PDumpUnlockKM(void)
+PDumpUnlock(void)
 {
 }
 
@@ -530,23 +547,15 @@ PDumpAddPersistantProcess(void)
 	return PVRSRV_OK;
 }
 
-#ifdef INLINE_IS_PRAGMA
-#pragma inline(PDumpStartInitPhaseKM)
-#endif
-static INLINE PVRSRV_ERROR
-PDumpStartInitPhaseKM(void)
-{
-	return PVRSRV_OK;
-}
 
 #ifdef INLINE_IS_PRAGMA
-#pragma inline(PDumpStopInitPhaseKM)
+#pragma inline(PDumpStopInitPhase)
 #endif
-static INLINE PVRSRV_ERROR
-PDumpStopInitPhaseKM(IMG_MODULE_ID eModuleID)
+static INLINE void
+PDumpStopInitPhase(IMG_BOOL bPDumpClient, IMG_BOOL bInitClient)
 {
-	PVR_UNREFERENCED_PARAMETER(eModuleID);
-	return PVRSRV_OK;
+	PVR_UNREFERENCED_PARAMETER(bPDumpClient);
+	PVR_UNREFERENCED_PARAMETER(bInitClient);
 }
 
 #ifdef INLINE_IS_PRAGMA
@@ -616,6 +625,22 @@ PDumpPanic(IMG_UINT32      ui32PanicNo,
 {
 	PVR_UNREFERENCED_PARAMETER(ui32PanicNo);
 	PVR_UNREFERENCED_PARAMETER(pszPanicMsg);
+	PVR_UNREFERENCED_PARAMETER(pszPPFunc);
+	PVR_UNREFERENCED_PARAMETER(ui32PPline);
+	return PVRSRV_OK;
+}
+
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpCaptureError)
+#endif
+static INLINE PVRSRV_ERROR
+PDumpCaptureError(PVRSRV_ERROR    ui32ErrorNo,
+                  IMG_CHAR*       pszErrorMsg,
+                  const IMG_CHAR* pszPPFunc,
+                  IMG_UINT32      ui32PPline)
+{
+	PVR_UNREFERENCED_PARAMETER(ui32ErrorNo);
+	PVR_UNREFERENCED_PARAMETER(pszErrorMsg);
 	PVR_UNREFERENCED_PARAMETER(pszPPFunc);
 	PVR_UNREFERENCED_PARAMETER(ui32PPline);
 	return PVRSRV_OK;

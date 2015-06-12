@@ -51,6 +51,33 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if defined(PVRSRV_ENABLE_PROCESS_STATS)
 #include "process_stats.h"
 #endif
+#include "osfunc.h"
+
+/* Ensure poison value is not divisible by 4.
+ * Used to poison memory to trip up use after free in kernel-side code
+ */
+#define OS_MEM_POISON_VALUE (0x6b)
+
+static inline void _pvr_vfree(const void* pvAddr)
+{
+#if defined(DEBUG)
+			/* Size harder to come by for vmalloc and since vmalloc allocates
+			 * a whole number of pages, poison the minimum size known to have
+			 * been allocated.
+			 */
+			OSMemSet((void*)pvAddr, OS_MEM_POISON_VALUE, PVR_LINUX_KMALLOC_ALLOCATION_THRESHOLD);
+#endif
+			vfree(pvAddr);
+}
+
+static inline void _pvr_kfree(const void* pvAddr)
+{
+#if defined(DEBUG)
+			/* Poison whole memory block */
+			OSMemSet((void*)pvAddr, OS_MEM_POISON_VALUE, ksize(pvAddr));
+#endif
+			kfree(pvAddr);
+}
 
 #if !defined(PVRSRV_ENABLE_PROCESS_STATS)
 IMG_INTERNAL void *OSAllocMem(IMG_UINT32 ui32Size)
@@ -91,11 +118,11 @@ IMG_INTERNAL void OSFreeMem(void *pvMem)
 	{
 		if (!is_vmalloc_addr(pvMem))
 		{
-			kfree(pvMem);
+			_pvr_kfree(pvMem);
 		}
 		else
 		{
-			vfree(pvMem);
+			_pvr_vfree(pvMem);
 		}
 	}
 }
@@ -308,7 +335,7 @@ IMG_INTERNAL void OSFreeMem(void *pvMem)
 			PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_KMALLOC,
 			                                (IMG_UINT64)(uintptr_t) pvMem);
 #endif
-			kfree(pvMem);
+			_pvr_kfree(pvMem);
 		}
 		else
 		{
@@ -319,7 +346,7 @@ IMG_INTERNAL void OSFreeMem(void *pvMem)
 			PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_VMALLOC,
 			                                (IMG_UINT64)(uintptr_t) pvMem);
 #endif
-			vfree(pvMem);
+			_pvr_vfree(pvMem);
 		}
 	}
 }
@@ -364,11 +391,11 @@ IMG_INTERNAL void OSFreeMemNoStats(void *pvMem)
 	{
 		if ( !is_vmalloc_addr(pvMem) )
 		{
-			kfree(pvMem);
+			_pvr_kfree(pvMem);
 		}
 		else
 		{
-			vfree(pvMem);
+			_pvr_vfree(pvMem);
 		}
 	}
 }

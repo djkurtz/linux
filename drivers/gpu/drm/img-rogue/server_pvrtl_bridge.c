@@ -61,7 +61,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <linux/slab.h>
 
-#include "lock.h"
 
 
 
@@ -296,8 +295,7 @@ TLReleaseData_exit:
  * Server bridge dispatch related glue 
  */
 
-static POS_LOCK pPVRTLBridgeLock;
-static IMG_BYTE pbyPVRTLBridgeBuffer[64 +  24];
+static IMG_BOOL bUseLock = IMG_FALSE;
 
 PVRSRV_ERROR InitPVRTLBridge(void);
 PVRSRV_ERROR DeinitPVRTLBridge(void);
@@ -307,23 +305,18 @@ PVRSRV_ERROR DeinitPVRTLBridge(void);
  */
 PVRSRV_ERROR InitPVRTLBridge(void)
 {
-	PVR_LOGR_IF_ERROR(OSLockCreate(&pPVRTLBridgeLock, LOCK_TYPE_PASSIVE), "OSLockCreate");
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_PVRTL, PVRSRV_BRIDGE_PVRTL_TLOPENSTREAM, PVRSRVBridgeTLOpenStream,
-					pPVRTLBridgeLock, pbyPVRTLBridgeBuffer,
-					64,  24);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_PVRTL, PVRSRV_BRIDGE_PVRTL_TLCLOSESTREAM, PVRSRVBridgeTLCloseStream,
-					pPVRTLBridgeLock, pbyPVRTLBridgeBuffer,
-					64,  24);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_PVRTL, PVRSRV_BRIDGE_PVRTL_TLACQUIREDATA, PVRSRVBridgeTLAcquireData,
-					pPVRTLBridgeLock, pbyPVRTLBridgeBuffer,
-					64,  24);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_PVRTL, PVRSRV_BRIDGE_PVRTL_TLRELEASEDATA, PVRSRVBridgeTLReleaseData,
-					pPVRTLBridgeLock, pbyPVRTLBridgeBuffer,
-					64,  24);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;
@@ -334,7 +327,6 @@ PVRSRV_ERROR InitPVRTLBridge(void)
  */
 PVRSRV_ERROR DeinitPVRTLBridge(void)
 {
-	PVR_LOGR_IF_ERROR(OSLockDestroy(pPVRTLBridgeLock), "OSLockDestroy");
 	return PVRSRV_OK;
 }
 

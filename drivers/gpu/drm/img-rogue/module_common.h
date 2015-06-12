@@ -72,17 +72,21 @@ extern LDM_DEV *gpsPVRLDMDev;
 #define __devexit_p(x) (&(x))
 #endif
 
+#if defined(PVRSRV_GPUVIRT_GUESTDRV) && defined(PVRSRV_GPUVIRT_MULTIDRV_MODEL)
+/* Functionality is n/a for guest drivers in a multi-driver model */
+#else
 void PVRSRVDriverShutdown(LDM_DEV *device);
 int PVRSRVDriverSuspend(struct device *device);
 int PVRSRVDriverResume(struct device *device);
+#endif
 
 int PVRSRVCommonOpen(struct file *pFile);
 void PVRSRVCommonRelease(struct file *pFile);
 
-int PVRSRVCommonPrepare(void);
-void PVRSRVCommonCleanup(void);
+int PVRSRVDriverInit(void);
+void PVRSRVDriverDeinit(void);
 
-int PVRSRVCommonInit(void);
-void PVRSRVCommonDeinit(void);
+int PVRSRVDeviceInit(void);
+void PVRSRVDeviceDeinit(void);
 
 #endif /* _MODULE_COMMON_H_ */

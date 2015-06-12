@@ -55,6 +55,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <services_kernel_client.h>
 #endif
 
+#if defined(__QNXNTO__)
+#include <stdio.h>
+#include <stdarg.h>
+#endif
+
 #include "img_types.h"
 #include "pvrsrv_device.h"
 #include "device.h"
@@ -73,7 +78,7 @@ IMG_UINT32 OSClockms(void);
 size_t OSGetPageSize(void);
 size_t OSGetPageShift(void);
 size_t OSGetPageMask(void);
-unsigned int OSGetOrder(size_t uiSize);
+size_t OSGetOrder(size_t uSize);
 
 typedef void (*PFN_THREAD)(void *pvData);
 
@@ -166,6 +171,8 @@ PVRSRV_ERROR OSThreadCreatePriority(IMG_HANDLE *phThread,
 PVRSRV_ERROR OSThreadDestroy(IMG_HANDLE hThread);
 
 void OSMemCopy(void *pvDst, const void *pvSrc, size_t ui32Size);
+#define OSCachedMemCopy OSMemCopy
+#define OSDeviceMemCopy OSMemCopy
 void *OSMapPhysToLin(IMG_CPU_PHYADDR BasePAddr, size_t ui32Bytes, IMG_UINT32 ui32Flags);
 IMG_BOOL OSUnMapPhysToLin(void *pvLinAddr, size_t ui32Bytes, IMG_UINT32 ui32Flags);
 
@@ -188,6 +195,13 @@ void OSInvalidateCPUCacheRangeKM(void *pvVirtStart,
 								 IMG_CPU_PHYADDR sCPUPhysStart,
 								 IMG_CPU_PHYADDR sCPUPhysEnd);
 
+typedef enum _IMG_DCACHE_ATTRIBUTE_
+{
+	PVR_DCACHE_LINE_SIZE = 0,
+	PVR_DCACHE_ATTRIBUTE_COUNT
+} IMG_DCACHE_ATTRIBUTE;
+
+IMG_UINT32 OSCPUCacheAttributeSize(IMG_DCACHE_ATTRIBUTE eCacheAttribute);
 
 IMG_PID OSGetCurrentProcessID(void);
 IMG_CHAR *OSGetCurrentProcessName(void);
@@ -198,18 +212,20 @@ IMG_CHAR *OSGetCurrentClientProcessNameKM(void);
 uintptr_t OSGetCurrentClientThreadIDKM(void);
 
 void OSMemSet(void *pvDest, IMG_UINT8 ui8Value, size_t ui32Size);
+#define OSCachedMemSet OSMemSet
+#define OSDeviceMemSet OSMemSet
 IMG_INT OSMemCmp(void *pvBufA, void *pvBufB, size_t uiLen);
 
-PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
-							Px_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr);
+PVRSRV_ERROR OSPhyContigPagesAlloc(PVRSRV_DEVICE_NODE *psDevNode, size_t uiSize,
+							PG_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr);
 
-void OSMMUPxFree(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle);
+void OSPhyContigPagesFree(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle);
 
-PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
+PVRSRV_ERROR OSPhyContigPagesMap(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle,
 						size_t uiSize, IMG_DEV_PHYADDR *psDevPAddr,
 						void **pvPtr);
 
-void OSMMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle, void *pvPtr);
+void OSPhyContigPagesUnmap(PVRSRV_DEVICE_NODE *psDevNode, PG_HANDLE *psMemHandle, void *pvPtr);
 
 
 PVRSRV_ERROR OSInitEnvData(void);
@@ -332,6 +348,10 @@ PVRSRV_ERROR OSBridgeCopyToUser (void *pvProcess,
 						const void *pvSrc,
 						size_t ui32Bytes);
 #endif
+
+/* Fairly arbitrary sizes - hopefully enough for all bridge calls */
+#define PVRSRV_MAX_BRIDGE_IN_SIZE      0x2000
+#define PVRSRV_MAX_BRIDGE_OUT_SIZE     0x1000
 
 PVRSRV_ERROR OSGetGlobalBridgeBuffers (void **ppvBridgeInBuffer,
 							IMG_UINT32 *pui32BridgeInBufferSize,

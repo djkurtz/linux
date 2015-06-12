@@ -107,7 +107,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 /*! Macro to calculate the n-byte aligned value from that supplied rounding up.
- * n must be a power of two. */
+ * n must be a power of two.
+ *
+ * Both arguments should be of a type with the same size otherwise the macro may
+ * cut off digits, e.g. imagine a 64 bit address in _x and a 32 bit value in _n.
+ */
 #define PVR_ALIGN(_x, _n)   (((_x)+((_n)-1)) & ~((_n)-1))
 
 
@@ -120,6 +124,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define unref__ __attribute__ ((unused))
 #else
 #define unref__
+#endif
+
+#if __GNUC__ >= 3
+# define IMG_LIKELY(x) __builtin_expect (!!(x), 1)
+# define IMG_UNLIKELY(x) __builtin_expect (!!(x), 0)
+#else
+# define IMG_LIKELY(x) (x)
+# define IMG_UNLIKELY(x) (x)
 #endif
 
 #if defined(_WIN32)

@@ -54,7 +54,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync_internal.h"
 #include "lock.h"
 #include "log2.h"
-/* FIXME */
 #if defined(__KERNEL__)
 #include "pvrsrv.h"
 #endif
@@ -111,6 +110,38 @@ typedef struct _SYNC_OP_COOKIE_
 /* forward declaration */
 static void
 _SyncPrimSetValue(SYNC_PRIM *psSyncInt, IMG_UINT32 ui32Value);
+
+/*
+	Internal interfaces for management of SYNC_PRIM_CONTEXT
+*/
+static void
+_SyncPrimContextUnref(SYNC_PRIM_CONTEXT *psContext)
+{
+	if (!OSAtomicRead(&psContext->hRefCount))
+	{
+		PVR_DPF((PVR_DBG_ERROR, "_SyncPrimContextUnref context already freed"));
+	}
+	else if (0 == OSAtomicDecrement(&psContext->hRefCount))
+	{
+		/* SyncPrimContextDestroy only when no longer referenced */
+		RA_Delete(psContext->psSpanRA);
+		RA_Delete(psContext->psSubAllocRA);
+		OSFreeMem(psContext);
+	}
+}
+
+static void
+_SyncPrimContextRef(SYNC_PRIM_CONTEXT *psContext)
+{
+	if (!OSAtomicRead(&psContext->hRefCount))
+	{
+		PVR_DPF((PVR_DBG_ERROR, "_SyncPrimContextRef context use after free"));
+	}
+	else
+	{
+		OSAtomicIncrement(&psContext->hRefCount);
+	}
+}
 
 /*
 	Internal interfaces for management of synchronisation block memory
@@ -229,9 +260,7 @@ SyncPrimBlockImport(RA_PERARENA_HANDLE hArena,
 		Ensure the synprim context doesn't go away while we have sync blocks
 		attached to it
 	*/
-	OSLockAcquire(psContext->hLock);
-	psContext->ui32RefCount++;
-	OSLockRelease(psContext->hLock);
+	_SyncPrimContextRef(psContext);
 
 	/* Allocate the block of memory */
 	eError = AllocSyncPrimitiveBlock(psContext, &psSyncBlock);
@@ -268,9 +297,7 @@ SyncPrimBlockImport(RA_PERARENA_HANDLE hArena,
 fail_spanalloc:
 	FreeSyncPrimitiveBlock(psSyncBlock);
 fail_syncblockalloc:
-	OSLockAcquire(psContext->hLock);
-	psContext->ui32RefCount--;
-	OSLockRelease(psContext->hLock);
+	_SyncPrimContextUnref(psContext);
 
 	return IMG_FALSE;
 }
@@ -295,9 +322,7 @@ SyncPrimBlockUnimport(RA_PERARENA_HANDLE hArena,
 	FreeSyncPrimitiveBlock(psSyncBlock);
 
 	/*	Drop our reference to the syncprim context */
-	OSLockAcquire(psContext->hLock);
-	psContext->ui32RefCount--;
-	OSLockRelease(psContext->hLock);
+	_SyncPrimContextUnref(psContext);
 }
 
 static INLINE IMG_UINT32 SyncPrimGetOffset(SYNC_PRIM *psSyncInt)
@@ -306,10 +331,6 @@ static INLINE IMG_UINT32 SyncPrimGetOffset(SYNC_PRIM *psSyncInt)
 	
 	PVR_ASSERT(psSyncInt->eType == SYNC_PRIM_TYPE_LOCAL);
 
-	/* FIXME: Subtracting a 64-bit address from another and then implicit
-	 * cast to 32-bit number. Need to review all call sequences that use this
-	 * function, added explicit casting for now.
-	 */
 	ui64Temp =  psSyncInt->u.sLocal.uiSpanAddr - psSyncInt->u.sLocal.psSyncBlock->uiSpanBase;
 	PVR_ASSERT(ui64Temp<IMG_UINT32_MAX);
 	return (IMG_UINT32)ui64Temp;
@@ -354,6 +375,8 @@ static void SyncPrimLocalFree(SYNC_PRIM *psSyncInt)
 	psContext = psSyncBlock->psContext;
 
 	RA_Free(psContext->psSubAllocRA, psSyncInt->u.sLocal.uiSpanAddr);
+	OSFreeMem(psSyncInt);
+	_SyncPrimContextUnref(psContext);
 }
 
 static void SyncPrimServerFree(SYNC_PRIM *psSyncInt)
@@ -366,6 +389,7 @@ static void SyncPrimServerFree(SYNC_PRIM *psSyncInt)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "SyncPrimServerFree failed"));
 	}
+	OSFreeMem(psSyncInt);
 }
 
 static void SyncPrimLocalUnref(SYNC_PRIM *psSyncInt)
@@ -471,7 +495,7 @@ static SYNC_BLOCK_LIST *_SyncPrimBlockListCreate(void)
 		return NULL;
 	}
 
-	OSMemSet(psBlockList->papsSyncPrimBlock,
+	OSCachedMemSet(psBlockList->papsSyncPrimBlock,
 			 0,
 			 sizeof(SYNC_PRIM_BLOCK *) * psBlockList->ui32BlockListSize);
 
@@ -505,7 +529,7 @@ static PVRSRV_ERROR _SyncPrimBlockListAdd(SYNC_BLOCK_LIST *psBlockList,
 			return PVRSRV_ERROR_OUT_OF_MEMORY;
 		}
 
-		OSMemCopy(papsNewSyncPrimBlock,
+		OSCachedMemCopy(papsNewSyncPrimBlock,
 				  psBlockList->papsSyncPrimBlock,
 				  sizeof(SYNC_PRIM_CONTEXT *) *
 				  psBlockList->ui32BlockListSize);
@@ -609,12 +633,6 @@ SyncPrimContextCreate(SHARED_DEV_CONNECTION hDevConnection,
 
 	psContext->hDevConnection = hDevConnection;
 
-	eError = OSLockCreate(&psContext->hLock, LOCK_TYPE_PASSIVE);
-	if ( eError != PVRSRV_OK)
-	{
-		goto fail_lockcreate;
-	}
-	
 	OSSNPrintf(psContext->azName, SYNC_PRIM_NAME_SIZE, "Sync Prim RA-%p", psContext);
 	OSSNPrintf(psContext->azSpanName, SYNC_PRIM_NAME_SIZE, "Sync Prim span RA-%p", psContext);
 
@@ -670,15 +688,13 @@ SyncPrimContextCreate(SHARED_DEV_CONNECTION hDevConnection,
 		goto fail_span;
 	}
 
-	psContext->ui32RefCount = 1;
+	OSAtomicWrite(&psContext->hRefCount, 1);
 
 	*phSyncPrimContext = psContext;
 	return PVRSRV_OK;
 fail_span:
 	RA_Delete(psContext->psSubAllocRA);
 fail_suballoc:
-	OSLockDestroy(psContext->hLock);
-fail_lockcreate:
 	OSFreeMem(psContext);
 fail_alloc:
 	return eError;
@@ -687,40 +703,11 @@ fail_alloc:
 IMG_INTERNAL void SyncPrimContextDestroy(PSYNC_PRIM_CONTEXT hSyncPrimContext)
 {
 	SYNC_PRIM_CONTEXT *psContext = hSyncPrimContext;
-	IMG_BOOL bDoRefCheck = IMG_TRUE;
-
-/* FIXME */
-#if defined(__KERNEL__)
-	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
-	if (psPVRSRVData->eServicesState != PVRSRV_SERVICES_STATE_OK)
+	if (1 != OSAtomicRead(&psContext->hRefCount))
 	{
-		bDoRefCheck =  IMG_FALSE;
+		PVR_DPF((PVR_DBG_ERROR, "%s attempted with active references, may be the result of a race", __FUNCTION__));
 	}
-#endif
-	OSLockAcquire(psContext->hLock);
-	if (--psContext->ui32RefCount != 0)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "SyncPrimContextDestroy: Refcount non-zero: %d", psContext->ui32RefCount));
-
-		if (bDoRefCheck)
-		{
-			PVR_ASSERT(0);
-		}
-		return;
-	}
-	/*
-		If we fail above then we won't release the lock. However, if that
-		happens things have already gone very wrong and we bail to save
-		freeing memory which might still be in use and holding this lock
-		will show up if anyone is trying to use this context after it has
-		been destroyed.
-	*/
-	OSLockRelease(psContext->hLock);
-
-	RA_Delete(psContext->psSpanRA);
-	RA_Delete(psContext->psSubAllocRA);
-	OSLockDestroy(psContext->hLock);
-	OSFreeMem(psContext);
+	_SyncPrimContextUnref(psContext);
 }
 
 static PVRSRV_ERROR _SyncPrimAlloc(PSYNC_PRIM_CONTEXT hSyncPrimContext,
@@ -758,6 +745,7 @@ static PVRSRV_ERROR _SyncPrimAlloc(PSYNC_PRIM_CONTEXT hSyncPrimContext,
 	psNewSync->u.sLocal.psSyncBlock = psSyncBlock;
 	SyncPrimGetCPULinAddr(psNewSync);
 	*ppsSync = &psNewSync->sCommon;
+	_SyncPrimContextRef(psContext);
 
 #if defined(PVRSRV_ENABLE_FULL_SYNC_TRACKING)
 	{
@@ -875,8 +863,6 @@ IMG_INTERNAL void SyncPrimFree(PVRSRV_CLIENT_SYNC_PRIM *psSync)
 		PVR_ASSERT(IMG_FALSE);
 		return;
 	}
-
-	OSFreeMem(psSyncInt);
 }
 
 #if defined(NO_HARDWARE)
@@ -917,6 +903,28 @@ SyncPrimSet(PVRSRV_CLIENT_SYNC_PRIM *psSync, IMG_UINT32 ui32Value)
 	SyncPrimPDump(psSync);
 #endif
 
+}
+
+IMG_INTERNAL PVRSRV_ERROR SyncPrimLocalGetHandleAndOffset(PVRSRV_CLIENT_SYNC_PRIM *psSync,
+							IMG_HANDLE *phBlock,
+							IMG_UINT32 *pui32Offset)
+{
+	SYNC_PRIM *psSyncInt;
+
+	if(!psSync || !phBlock || !pui32Offset)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "SyncPrimGetHandleAndOffset: invalid input pointer"));
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
+
+	psSyncInt = IMG_CONTAINER_OF(psSync, SYNC_PRIM, sCommon);
+
+	PVR_ASSERT(psSyncInt->eType == SYNC_PRIM_TYPE_LOCAL);
+
+	*phBlock = psSyncInt->u.sLocal.psSyncBlock->hServerSyncPrimBlock;
+	*pui32Offset = psSyncInt->u.sLocal.uiSpanAddr - psSyncInt->u.sLocal.psSyncBlock->uiSpanBase;
+
+	return PVRSRV_OK;
 }
 
 IMG_INTERNAL IMG_UINT32 SyncPrimGetFirmwareAddr(PVRSRV_CLIENT_SYNC_PRIM *psSync)
@@ -1496,7 +1504,7 @@ PVRSRV_ERROR SyncPrimServerAlloc(SYNC_BRIDGE_HANDLE hBridge,
 		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 		goto e0;
 	}
-	OSMemSet(psNewSync, 0, sizeof(SYNC_PRIM));
+	OSCachedMemSet(psNewSync, 0, sizeof(SYNC_PRIM));
 
 	if(pszClassName)
 	{
@@ -1818,12 +1826,6 @@ IMG_INTERNAL void SyncPrimPDumpCBP(PVRSRV_CLIENT_SYNC_PRIM *psSync,
 	psSyncBlock = psSyncInt->u.sLocal.psSyncBlock;
 	psContext = psSyncBlock->psContext;
 
-	/* FIXME: uiWriteOffset, uiPacketSize, uiBufferSize were changed to
-	 * 64-bit quantities to resolve Windows compiler warnings.
-	 * However the bridge is only 32-bit hence compiler warnings
-	 * of implicit cast and loss of data.
-	 * Added explicit cast and assert to remove warning.
-	 */
 #if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
 	PVR_ASSERT(uiWriteOffset<IMG_UINT32_MAX);
 	PVR_ASSERT(uiPacketSize<IMG_UINT32_MAX);

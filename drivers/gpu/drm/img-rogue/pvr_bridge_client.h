@@ -71,6 +71,9 @@ PVRSRV_ERROR PVRSRVBridgeCall(IMG_HANDLE hServices,
 							  void *pvParamOut,
 							  IMG_UINT32 ui32OutBufferSize);
 
+IMG_OS_CONNECTION GetOSConnection(IMG_HANDLE hServices);
+
+
 #if defined (__cplusplus)
 }
 #endif

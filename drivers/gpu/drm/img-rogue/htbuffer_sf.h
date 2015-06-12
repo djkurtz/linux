@@ -60,12 +60,20 @@ extern "C" {
 
 
 /* String used in pvrdebug -h output */
-#define HTB_LOG_GROUPS_STRING_LIST   "ctrl,mmu,sync,dm"
+#define HTB_LOG_GROUPS_STRING_LIST   "ctrl,mmu,sync,main"
 
 /* Used in print statements to display log group state, one %s per group defined */
 #define HTB_LOG_ENABLED_GROUPS_LIST_PFSPEC  "%s%s%s%s"
 
 /* Available log groups - Master template
+ *
+ * Group usage is as follows:
+ *    CTRL  - Internal Host Trace information and synchronisation data
+ *    MMU   - MMU page mapping information
+ *    SYNC  - Synchronisation debug
+ *    MAIN  - Data master kicks, etc. tying in with the MAIN group in FWTrace
+ *    DBG   - Temporary debugging group, logs not to be left in the driver
+ *
  */
 #define HTB_LOG_SFGROUPLIST                               \
 	X( HTB_GROUP_NONE,     NONE  )                        \
@@ -73,7 +81,7 @@ extern "C" {
 	X( HTB_GROUP_CTRL,     CTRL  )                        \
 	X( HTB_GROUP_MMU,      MMU   )                        \
 	X( HTB_GROUP_SYNC,     SYNC  )                        \
-	X( HTB_GROUP_DM,       DM    )                        \
+	X( HTB_GROUP_MAIN,     MAIN  )                        \
 /* Debug group HTB_GROUP_DBG must always be last */       \
 	X( HTB_GROUP_DBG,      DBG   )
 
@@ -102,7 +110,12 @@ X( 7,  HTB_GROUP_CTRL,  HTB_SF_CTRL_FWSYNC_SCALE_RPT,   "FW Sync scale info OSTS
 X( 8,  HTB_GROUP_CTRL,  HTB_SF_CTRL_FWSYNC_MARK,        "FW Sync Partition marker: %d\n", 1) \
 X( 9,  HTB_GROUP_CTRL,  HTB_SF_CTRL_FWSYNC_MARK_RPT,    "FW Sync Partition repeat: %d\n", 1) \
 \
-X( 1,  HTB_GROUP_MMU,   HTB_SF_MMU_MAP_PAGE,            "Page mapped 0x%08x\n", 1) \
+X( 1,  HTB_GROUP_MMU,   HTB_SF_MMU_PAGE_OP_TABLE,       "MMU page op table entry page_id=%08x%08x index=%d level=%d val=%08x%08x map=%d\n", 7) \
+X( 2,  HTB_GROUP_MMU,   HTB_SF_MMU_PAGE_OP_ALLOC,       "MMU allocating DevVAddr from %08x%08x to %08x%08x\n", 4) \
+X( 3,  HTB_GROUP_MMU,   HTB_SF_MMU_PAGE_OP_FREE,        "MMU freeing DevVAddr from %08x%08x to %08x%08x\n", 4) \
+X( 4,  HTB_GROUP_MMU,   HTB_SF_MMU_PAGE_OP_MAP,         "MMU mapping DevVAddr %08x%08x to DevPAddr %08x%08x\n", 4) \
+X( 5,  HTB_GROUP_MMU,   HTB_SF_MMU_PAGE_OP_PMRMAP,      "MMU mapping PMR DevVAddr %08x%08x to DevPAddr %08x%08x\n", 4) \
+X( 6,  HTB_GROUP_MMU,   HTB_SF_MMU_PAGE_OP_UNMAP,       "MMU unmapping DevVAddr %08x%08x\n", 2) \
 \
 X( 1,  HTB_GROUP_SYNC,  HTB_SF_SYNC_SERVER_ALLOC,       "Server sync allocation [%08X]\n", 1) \
 X( 2,  HTB_GROUP_SYNC,  HTB_SF_SYNC_SERVER_UNREF,       "Server sync unreferenced [%08X]\n", 1) \
@@ -111,8 +124,14 @@ X( 4,  HTB_GROUP_SYNC,  HTB_SF_SYNC_PRIM_OP_TAKE,       "Sync OP take 0x%08x ser
 X( 5,  HTB_GROUP_SYNC,  HTB_SF_SYNC_PRIM_OP_COMPLETE,   "Sync OP complete 0x%08x\n", 1) \
 X( 6,  HTB_GROUP_SYNC,  HTB_SF_SYNC_PRIM_OP_DESTROY,    "Sync OP destroy 0x%08x\n", 1) \
 \
-X( 1,  HTB_GROUP_DM,    HTB_SF_DM_KICK_TA,              "Kick TA: FWCtx %08X @ %d\n", 2) \
-X( 2,  HTB_GROUP_DM,    HTB_SF_DM_KICK_3D,              "Kick 3D: FWCtx %08X @ %d\n", 2) \
+X( 1,  HTB_GROUP_MAIN,  HTB_SF_MAIN_KICK_TA,            "Kick TA: FWCtx %08X @ %d\n", 2) \
+X( 2,  HTB_GROUP_MAIN,  HTB_SF_MAIN_KICK_3D,            "Kick 3D: FWCtx %08X @ %d\n", 2) \
+X( 3,  HTB_GROUP_MAIN,  HTB_SF_MAIN_KICK_CDM,           "Kick CDM: FWCtx %08X @ %d\n", 2) \
+X( 4,  HTB_GROUP_MAIN,  HTB_SF_MAIN_KICK_RTU,           "Kick RTU: FWCtx %08X @ %d\n", 2) \
+X( 5,  HTB_GROUP_MAIN,  HTB_SF_MAIN_KICK_SHG,           "Kick SHG: FWCtx %08X @ %d\n", 2) \
+X( 6,  HTB_GROUP_MAIN,  HTB_SF_MAIN_KICK_2D,            "Kick 2D: FWCtx %08X @ %d\n", 2) \
+X( 7,  HTB_GROUP_MAIN,  HTB_SF_MAIN_KICK_UNCOUNTED,     "Kick (uncounted) for all DMs\n", 0) \
+X( 8,  HTB_GROUP_MAIN,  HTB_SF_MAIN_FWCCB_CMD,          "FW CCB Cmd: %d\n", 1) \
 \
 X( 1,  HTB_GROUP_DBG,   HTB_SF_DBG_INTPAIR,             "0x%8.8x 0x%8.8x\n", 2) \
 \
@@ -173,7 +192,7 @@ typedef enum HTB_LOG_SFids {
 
 /* Return the group id that the given (enum generated) id belongs to */
 #define HTB_SF_GID(x) (((x)>>12) & 0xf)
-/* future improvment to support log levels */
+/* future improvement to support log levels */
 #define HTB_SF_LVL(x) (0)
 /* Returns how many arguments the SF(string format) for the given (enum generated) id requires */
 #define HTB_SF_PARAMNUM(x) (((x)>>16) & 0xf)

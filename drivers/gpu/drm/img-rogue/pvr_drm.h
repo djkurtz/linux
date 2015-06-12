@@ -1,3 +1,5 @@
+/* -*- mode: c; indent-tabs-mode: t; c-basic-offset: 8; tab-width: 8 -*- */
+/* vi: set ts=8 sw=8 sts=8: */
 /*************************************************************************/ /*!
 @File
 @Title          PowerVR drm driver
@@ -44,27 +46,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if !defined(__PVR_DRM_H__)
 #define __PVR_DRM_H__
 
-#include <linux/dma-buf.h>
 #include <linux/version.h>
 #include <drm/drmP.h>
 
-#if defined(LMA)
-#define PVR_DRM_PHYS_HEAP	PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL
-#else
-#define PVR_DRM_PHYS_HEAP	PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL
-#endif
-
 #include "module_common.h"
 #include "connection_server.h"
-#include "pvr_drm_external.h"
-#include "pvr_drm_display.h"
-#include "pvr_linux_fence.h"
 #include "sync_server.h"
 #include "pmr.h"
 
-#if defined(SUPPORT_DRM_DC_MODULE)
-#include <linux/spinlock.h>
-#include "scp.h"
+#if defined(SUPPORT_BUFFER_SYNC)
+#include "pvr_fence.h"
 #endif
 
 #if defined(PDUMP)
@@ -77,53 +68,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	#error "LDM_PLATFORM or LDM_PCI must be defined"
 #endif
 
-#define	MAKESTRING(x)	#x
-#define TOSTRING(x)	MAKESTRING(x)
-
 #define	PVR_DRM_FILE_FROM_FILE(pFile)		((struct drm_file *)((pFile)->private_data))
 #define	PVR_FILE_FROM_DRM_FILE(pDRMFile)	((pDRMFile)->filp)
-
-struct pvr_drm_dev_priv
-{
-#if defined(SUPPORT_DRM_DC_MODULE)
-	/* The DRM device funcs *MUST* be the first field in the structure
-	   as pvr_drm_display.h relies on this being the case. */
-	struct pvr_drm_device_funcs funcs;
-	void *display_priv;
-
-	IMG_HANDLE debug_notify;
-#endif
-
-	PVRSRV_DEVICE_NODE *dev_node;
-
-#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
-	IMG_HANDLE *hSysData;
-#else
-	unsigned int irq;
-	pvr_drm_irq_handler irq_handler;
-#endif
-};
-
-enum pvr_drm_gem_object_type
-{
-	PVR_DRM_GEM_UNDEFINED = 0,
-	PVR_DRM_GEM_PMR,
-	PVR_DRM_GEM_DISPLAY_PMR,
-	PVR_DRM_GEM_IMPORT_PMR,
-};
-
-struct pvr_drm_gem_object
-{
-	enum pvr_drm_gem_object_type type;
-	struct drm_gem_object base;
-	PMR *pmr;
-	void *obj;
-	SERVER_SYNC_PRIMITIVE *apsSyncPrim[PVRSRV_GEM_SYNC_TYPE_COUNT];
-	IMG_UINT32 auiSyncPrimVAddr[PVRSRV_GEM_SYNC_TYPE_COUNT];
-	struct reservation_object *resv;
-};
-
-#define to_pvr_drm_gem_object(obj) container_of(obj, struct pvr_drm_gem_object, base)
 
 extern struct drm_driver sPVRDRMDriver;
 
@@ -144,55 +90,6 @@ int PVRSRV_BridgeDispatchKM(struct drm_device *dev, void *arg, struct drm_file *
 
 #if defined(CONFIG_COMPAT)
 int PVRSRV_BridgeCompatDispatchKM(struct file *file, unsigned int cmd, unsigned long arg);
-#endif
-
-int PVRDRMGEMCreate(struct drm_device *dev, void *arg, struct drm_file *file);
-int PVRDRMGEMToIMGHandle(struct drm_device *dev, void *arg, struct drm_file *file);
-int PVRDRMIMGToGEMHandle(struct drm_device *dev, void *arg, struct drm_file *file);
-int PVRDRMGEMSyncGet(struct drm_device *dev, void *arg, struct drm_file *file);
-int PVRDRMGEMCreateFenceContext(struct drm_device *dev, void *arg, struct drm_file *file);
-int PVRDRMGEMDestroyFenceContext(struct drm_device *dev, void *arg, struct drm_file *file);
-int PVRDRMGEMAttachFence(struct drm_device *dev, void *arg, struct drm_file *file);
-int PVRDRMGEMCreateFence(struct drm_device *dev, void *arg, struct drm_file *file);
-
-int PVRSRVGEMInitObject(struct drm_gem_object *obj,
-			enum pvr_drm_gem_object_type type,
-			PVRSRV_MEMALLOCFLAGS_T alloc_flags);
-
-struct drm_gem_object *PVRSRVGEMObjectCreate(struct drm_device *dev,
-					     enum pvr_drm_gem_object_type type,
-					     size_t size,
-					     PVRSRV_MEMALLOCFLAGS_T alloc_flags);
-void PVRSRVGEMFreeObject(struct drm_gem_object *obj);
-
-PVRSRV_ERROR PVRSRVGEMCreatePMR(PVRSRV_DEVICE_NODE *psDevNode,
-				struct drm_gem_object *psObj,
-				PVRSRV_MEMALLOCFLAGS_T uiFlags,
-				PMR **ppsPMR);
-struct drm_gem_object *PVRSRVGEMGetObject(PMR *psPMR);
-PMR *PVRSRVGEMMMapLookupPMR(struct file *psFile, struct vm_area_struct *psVMA);
-
-struct drm_gem_object *PVRSRVPrimeImport(struct drm_device *dev, struct dma_buf *dma_buf);
-struct dma_buf *PVRSRVPrimeExport(struct drm_device unref__ *dev, struct drm_gem_object *obj, int flags);
-
-#if defined(SUPPORT_DRM_DC_MODULE)
-int PVRSRVDRMDisplayInit(struct drm_device *dev);
-int PVRSRVDRMDisplayDeinit(struct drm_device *dev);
-
-PVRSRV_ERROR PVRSRVDRMDisplayCreatePMR(PVRSRV_DEVICE_NODE *psDevNode,
-				       struct drm_device *dev,
-				       size_t size,
-				       PVRSRV_MEMALLOCFLAGS_T uiFlags,
-				       PMR **ppsPMR,
-				       void **buffer,
-				       struct reservation_object **resv);
-u32 PVRSRVDRMDisplayGetVBlankCounter(struct drm_device *dev, int crtc);
-int PVRSRVDRMDisplayEnableVBlank(struct drm_device *dev, int crtc);
-void PVRSRVDRMDisplayDisableVBlank(struct drm_device *dev, int crtc);
-
-int PVRSRVGEMDumbCreate(struct drm_file *file, struct drm_device *dev, struct drm_mode_create_dumb *args);
-int PVRSRVGEMDumbDestroy(struct drm_file *file, struct drm_device *dev, uint32_t handle);
-int PVRSRVGEMDumbMapOffset(struct drm_file *file, struct drm_device *dev, uint32_t handle, uint64_t *offset);
 #endif
 
 #endif	/* defined(SUPPORT_DRM) */

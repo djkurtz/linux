@@ -85,6 +85,7 @@ static struct dev_pm_ops powervr_dev_pm_ops = {
 
 static const struct of_device_id mt_powervr_of_match[] = {
 	{ .compatible = "mediatek,mt8173-gpu", },
+	{ .compatible = "mediatek,HAN", },
 	{},
 };
 
@@ -101,17 +102,7 @@ static struct platform_driver powervr_driver = {
 	.shutdown	= PVRSRVDriverShutdown,
 };
 
-#if defined(MODULE)
-static struct platform_device_info powervr_device_info =
-{
-	.name			= DEVNAME,
-	.id			= -1,
-	.dma_mask		= DMA_BIT_MASK(32),
-};
-#endif	/* defined(MODULE) */
-
 static IMG_BOOL bCalledSysInit = IMG_FALSE;
-static IMG_BOOL	bDriverProbeSucceeded = IMG_FALSE;
 
 /*!
 ******************************************************************************
@@ -164,12 +155,7 @@ int PVRSRVSystemInit(struct drm_device *pDrmDevice)
 void PVRSRVSystemDeInit(struct platform_device *pDevice)
 {
 	PVR_TRACE(("PVRSRVSystemDeInit"));
-
 	PVRSRVDeInit(pDevice);
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0))
-	gpsPVRLDMDev = NULL;
-#endif
 }
 
 /*!
@@ -199,7 +185,12 @@ static int PVRSRVDriverProbe(struct platform_device *pDevice)
 	}
 
 	result = drm_platform_init(&sPVRDRMDriver, pDevice);
-	bDriverProbeSucceeded = (result == 0);
+
+	if (result == 0)
+	{
+		PVRSRVDeviceInit();
+	}
+
 	return result;
 }
 
@@ -222,11 +213,9 @@ static int PVRSRVDriverProbe(struct platform_device *pDevice)
 static int PVRSRVDriverRemove(struct platform_device *pDevice)
 {
 	PVR_TRACE(("PVRSRVDriverRemove (pDevice=%p)", pDevice));
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0))
-	drm_platform_exit(&sPVRDRMDriver, pDevice);
-#else
+
+	PVRSRVDeviceDeinit();
 	drm_put_dev(platform_get_drvdata(pDevice));
-#endif
 	return 0;
 }
 
@@ -329,7 +318,7 @@ static int __init PVRCore_Init(void)
 	}
 #endif
 
-	if ((error = PVRSRVCommonPrepare()) != 0)
+	if ((error = PVRSRVDriverInit()) != 0)
 	{
 		return error;
 	}
@@ -341,24 +330,7 @@ static int __init PVRCore_Init(void)
 		return error;
 	}
 
-#if defined(MODULE)
-	gpsPVRLDMDev = platform_device_register_full(&powervr_device_info);
-	error = IS_ERR(gpsPVRLDMDev) ? PTR_ERR(gpsPVRLDMDev) : 0;
-	if (error != 0)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "PVRCore_Init: unable to register platform device (%d)", error));
-		return error;
-	}
-#endif /* defined(MODULE) */
-
-	/* Check that the driver probe function was called */
-	if (!bDriverProbeSucceeded)
-	{
-		PVR_TRACE(("PVRCore_Init: PVRSRVDriverProbe has not been called or did not succeed - check that hardware is detected"));
-		return error;
-	}
-
-	return PVRSRVCommonInit();
+	return 0;
 }
 
 
@@ -386,15 +358,9 @@ static void __exit PVRCore_Cleanup(void)
 {
 	PVR_TRACE(("PVRCore_Cleanup"));
 
-	PVRSRVCommonDeinit();
-
-#if defined(MODULE)
-	PVR_ASSERT(gpsPVRLDMDev != NULL);
-	platform_device_unregister(gpsPVRLDMDev);
-#endif /* defined(MODULE) */
 	platform_driver_unregister(&powervr_driver);
 
-	PVRSRVCommonCleanup();
+	PVRSRVDriverDeinit();
 
 #if defined(PDUMP)
 	dbgdrv_cleanup();

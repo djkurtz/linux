@@ -81,7 +81,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define PMR_MAX_SYMBOLIC_ADDRESS_LENGTH_DEFAULT		(60)
 #define PMR_MAX_MEMSPACE_NAME_LENGTH_DEFAULT		(20)
 #define PMR_MAX_MEMSPNAME_SYMB_ADDR_LENGTH_DEFAULT	(PMR_MAX_SYMBOLIC_ADDRESS_LENGTH_DEFAULT + PMR_MAX_MEMSPACE_NAME_LENGTH_DEFAULT)
-#define PMR_MAX_PARAMSTREAM_FILENAME_LENGTH_DEFAULT (100)
 #define PMR_MAX_TRANSLATION_STACK_ALLOC				(32)
 
 typedef IMG_UINT64 PMR_BASE_T;
@@ -539,6 +538,13 @@ PMRRefPMR(PMR *psPMR);
 extern PVRSRV_ERROR
 PMRUnrefPMR(PMR *psPMR);
 
+/*
+ * PMRUnrefUnlockPMR()
+ *
+ * Same as above but also unlocks the PMR.
+ */
+extern PVRSRV_ERROR
+PMRUnrefUnlockPMR(PMR *psPMR);
 
 /*
  * PMR_Flags()
@@ -550,9 +556,12 @@ PMRUnrefPMR(PMR *psPMR);
  * Returns the flags as specified on the PMR.  The flags are to be
  * interpreted as mapping permissions
  */
-extern PVRSRV_ERROR
-PMR_Flags(const PMR *psPMR,
-          PMR_FLAGS_T *puiMappingFlags);
+extern PMR_FLAGS_T
+PMR_Flags(const PMR *psPMR);
+
+extern IMG_BOOL
+PMR_IsSparse(const PMR *psPMR);
+
 
 
 extern PVRSRV_ERROR

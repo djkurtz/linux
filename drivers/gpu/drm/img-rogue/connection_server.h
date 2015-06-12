@@ -62,8 +62,8 @@ typedef struct _CONNECTION_DATA_
 	struct _SYNC_CONNECTION_DATA_	*psSyncConnectionData;
 	struct _PDUMP_CONNECTION_DATA_	*psPDumpConnectionData;
 
-	/* True if the process is the initialisation server. */
-	IMG_BOOL			bInitProcess;
+	/* Holds the client flags supplied at connection time */
+	IMG_UINT32			ui32ClientFlags;
 
 	/*
 	 * OS specific data can be stored via this handle.

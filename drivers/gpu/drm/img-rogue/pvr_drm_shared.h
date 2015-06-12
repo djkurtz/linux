@@ -1,3 +1,5 @@
+/* -*- mode: c; indent-tabs-mode: t; c-basic-offset: 8; tab-width: 8 -*- */
+/* vi: set ts=8 sw=8 sts=8: */
 /*************************************************************************/ /*!
 @File
 @Title          PVR DRM definitions shared between kernel and user space.
@@ -43,6 +45,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if !defined(__PVR_DRM_SHARED_H__)
 #define __PVR_DRM_SHARED_H__
 
+#include <linux/types.h>
+
 #if defined(__KERNEL__)
 #include <drm/drm.h>
 #else
@@ -60,77 +64,6 @@ struct drm_pvr_unpriv_cmd {
 	__s32 result;
 };
 
-#define PVR_GEM_USE_SCANOUT	(1 << 0)
-#define PVR_GEM_USE_CURSOR	(1 << 1)
-
-struct drm_pvr_gem_create {
-	/* Input parameters (preserved by the ioctl) */
-	__u64 size;
-	__u32 alloc_flags;
-	__u32 usage_flags;
-
-	/* Output parameter */
-	__u32 handle;
-	__u32 pad;
-};
-
-struct drm_pvr_gem_to_img_handle {
-	/* Input parameter (preserved by the ioctl) */
-	__u32 gem_handle;
-	__u32 pad;
-
-	/* Output parameter */
-	__u64 img_handle;
-};
-
-struct drm_pvr_img_to_gem_handle {
-	/* Input parameter (preserved by the ioctl) */
-	__u64 img_handle;
-
-	/* Output parameter */
-	__u32 gem_handle;
-	__u32 pad;
-};
-
-struct drm_pvr_gem_sync_get {
-	/* Input parameters (preserved by the ioctl) */
-	__u32 gem_handle;
-	__u32 type;
-
-	/* Output parameters */
-	__u64 sync_handle;
-	__u32 firmware_addr;
-	__u32 pad;
-};
-
-struct drm_pvr_gem_create_fence_context {
-	/* Input parameters (preserved by the ioctl) */
-	__u32	shared;
-	__u32	pad;
-
-	/* Output parameters */
-	__u64	context;
-};
-
-struct drm_pvr_gem_destroy_fence_context {
-	/* Input parameters (preserved by the ioctl) */
-	__u64	context;
-};
-
-struct drm_pvr_gem_attach_fence {
-	/* Input parameters (preserved by the ioctl) */
-	__u64	context;
-	__u32	gem_handle;
-	__u32	type;
-};
-
-struct drm_pvr_gem_create_fence {
-	/* Input parameters (preserved by the ioctl) */
-	__u64	context;
-	__u32	gem_handle;
-	__u32	type;
-};
-
 /*
  * DRM command numbers, relative to DRM_COMMAND_BASE.
  * These defines must be prefixed with "DRM_".
@@ -138,25 +71,8 @@ struct drm_pvr_gem_create_fence {
 #define DRM_PVR_SRVKM_CMD		0 /* Used for PVR Services ioctls */
 #define DRM_PVR_DBGDRV_CMD		1 /* Debug driver (PDUMP) ioctls */
 #define DRM_PVR_UNPRIV_CMD		2 /* PVR driver unprivileged ioctls */
-#define DRM_PVR_GEM_CREATE		3
-#define DRM_PVR_GEM_TO_IMG_HANDLE	4
-#define DRM_PVR_IMG_TO_GEM_HANDLE	5
-#define DRM_PVR_GEM_SYNC_GET		6
-#define DRM_PVR_GEM_CREATE_FENCE_CONTEXT	7
-#define DRM_PVR_GEM_DESTROY_FENCE_CONTEXT	8
-#define DRM_PVR_GEM_ATTACH_FENCE		9
-#define DRM_PVR_GEM_CREATE_FENCE		10
 
 /* These defines must be prefixed with "DRM_IOCTL_". */
-#define DRM_IOCTL_PVR_UNPRIV_CMD		DRM_IOWR(DRM_COMMAND_BASE + DRM_PVR_UNPRIV_CMD, struct drm_pvr_unpriv_cmd)
-#define DRM_IOCTL_PVR_GEM_CREATE		DRM_IOWR(DRM_COMMAND_BASE + DRM_PVR_GEM_CREATE, struct drm_pvr_gem_create)
-#define DRM_IOCTL_PVR_GEM_TO_IMG_HANDLE	DRM_IOWR(DRM_COMMAND_BASE + DRM_PVR_GEM_TO_IMG_HANDLE, struct drm_pvr_gem_to_img_handle)
-#define DRM_IOCTL_PVR_IMG_TO_GEM_HANDLE	DRM_IOWR(DRM_COMMAND_BASE + DRM_PVR_IMG_TO_GEM_HANDLE, struct drm_pvr_img_to_gem_handle)
-#define DRM_IOCTL_PVR_GEM_SYNC_GET		DRM_IOWR(DRM_COMMAND_BASE + DRM_PVR_GEM_SYNC_GET, struct drm_pvr_gem_sync_get)
-#define DRM_IOCTL_PVR_GEM_CREATE_FENCE_CONTEXT	DRM_IOWR(DRM_COMMAND_BASE + DRM_PVR_GEM_CREATE_FENCE_CONTEXT, struct drm_pvr_gem_create_fence_context)
-#define DRM_IOCTL_PVR_GEM_DESTROY_FENCE_CONTEXT	DRM_IOW(DRM_COMMAND_BASE + DRM_PVR_GEM_DESTROY_FENCE_CONTEXT, struct drm_pvr_gem_destroy_fence_context)
-#define DRM_IOCTL_PVR_GEM_ATTACH_FENCE		DRM_IOW(DRM_COMMAND_BASE + DRM_PVR_GEM_ATTACH_FENCE, struct drm_pvr_gem_attach_fence)
-#define DRM_IOCTL_PVR_GEM_CREATE_FENCE		DRM_IOW(DRM_COMMAND_BASE + DRM_PVR_GEM_CREATE_FENCE, struct drm_pvr_gem_create_fence)
-
+#define DRM_IOCTL_PVR_UNPRIV_CMD	DRM_IOWR(DRM_COMMAND_BASE + DRM_PVR_UNPRIV_CMD, struct drm_pvr_unpriv_cmd)
 
 #endif /* defined(__PVR_DRM_SHARED_H__) */

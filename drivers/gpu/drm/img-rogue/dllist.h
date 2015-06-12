@@ -220,29 +220,20 @@ void dllist_remove_node(PDLLIST_NODE psListNode)
 }
 
 
-/*!
-	Callback function called on each element of the list
-*/
-typedef IMG_BOOL (*PFN_NODE_CALLBACK)(PDLLIST_NODE psNode, void *pvCallbackData);
-
-
 /*************************************************************************/ /*!
 @Function       dllist_foreach_node
 
-@Description    Walk through all the nodes on the list until the 
-				end or a callback returns FALSE
+@Description    Walk through all the nodes on the list
 
-@Input          psListHead			List node to start the operation
-@Input			pfnCallBack			PFN_NODE_CALLBACK function called on each element	
-@Input			pvCallbackData		Data passed to pfnCallBack alongside the current Node
+@Input          list_head			List node to start the operation
+@Input			node				Current list node
+@Input			next				Node after the current one
 
 */
 /*****************************************************************************/
-IMG_INTERNAL
-void dllist_foreach_node(PDLLIST_NODE psListHead,
-						 PFN_NODE_CALLBACK pfnCallBack,
-						 void *pvCallbackData);
-
+#define dllist_foreach_node(list_head, node, next)						\
+	for (node = (list_head)->psNextNode, next = (node)->psNextNode;		\
+		 node != (list_head);											\
+		 node = next, next = (node)->psNextNode)
 
 #endif	/* _DLLIST_ */
-

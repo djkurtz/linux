@@ -42,8 +42,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef _RGXCONFIG_KM_4_V_2_51_H_
 #define _RGXCONFIG_KM_4_V_2_51_H_
 
-/***** Automatically generated file (4/27/2015 2:03:29 PM): Do not edit manually ********************/
-/***** Timestamp:  (4/27/2015 2:03:29 PM)************************************************************/
+/***** Automatically generated file (23/07/2015 12:44:37): Do not edit manually ********************/
+/***** Timestamp:  (23/07/2015 12:44:37)************************************************************/
 
 #define RGX_BNC_KM_B 4
 #define RGX_BNC_KM_N 2
@@ -55,15 +55,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_FEATURE_NUM_CLUSTERS (2)
 #define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
 #define RGX_FEATURE_PHYS_BUS_WIDTH (40)
+#define RGX_FEATURE_PERFBUS 
 #define RGX_FEATURE_AXI_ACELITE 
 #define RGX_FEATURE_CLUSTER_GROUPING 
 #define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
+#define RGX_FEATURE_DYNAMIC_DUST_POWER 
 #define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 #define RGX_FEATURE_TLA 
 #define RGX_FEATURE_GS_RTA_SUPPORT 
+#define RGX_FEATURE_TPU_CEM_DATAMASTER_GLOBAL_REGISTERS 
 #define RGX_FEATURE_NUM_ISP_IPP_PIPES (8)
 #define RGX_FEATURE_META (LTP218)
+#define RGX_FEATURE_TPU_FILTERING_MODE_CONTROL 
 #define RGX_FEATURE_XT_TOP_INFRASTRUCTURE 
+#define RGX_FEATURE_COMPUTE_MORTON_CAPABLE 
 #define RGX_FEATURE_FBCDC_ARCHITECTURE (2)
 #define RGX_FEATURE_META_COREMEM_SIZE (32)
 #define RGX_FEATURE_COMPUTE 

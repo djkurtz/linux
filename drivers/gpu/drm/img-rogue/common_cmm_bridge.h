@@ -51,7 +51,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem_typedefs.h"
 
 
-
 #define PVRSRV_BRIDGE_CMM_CMD_FIRST			0
 #define PVRSRV_BRIDGE_CMM_DEVMEMINTCTXEXPORT			PVRSRV_BRIDGE_CMM_CMD_FIRST+0
 #define PVRSRV_BRIDGE_CMM_DEVMEMINTCTXUNEXPORT			PVRSRV_BRIDGE_CMM_CMD_FIRST+1
@@ -69,14 +68,12 @@ typedef struct PVRSRV_BRIDGE_IN_DEVMEMINTCTXEXPORT_TAG
 	IMG_HANDLE hDevMemServerContext;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_DEVMEMINTCTXEXPORT;
 
-
 /* Bridge out structure for DevmemIntCtxExport */
 typedef struct PVRSRV_BRIDGE_OUT_DEVMEMINTCTXEXPORT_TAG
 {
 	IMG_HANDLE hDevMemIntCtxExport;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_DEVMEMINTCTXEXPORT;
-
 
 
 /*******************************************
@@ -89,13 +86,11 @@ typedef struct PVRSRV_BRIDGE_IN_DEVMEMINTCTXUNEXPORT_TAG
 	IMG_HANDLE hDevMemIntCtxExport;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_DEVMEMINTCTXUNEXPORT;
 
-
 /* Bridge out structure for DevmemIntCtxUnexport */
 typedef struct PVRSRV_BRIDGE_OUT_DEVMEMINTCTXUNEXPORT_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_DEVMEMINTCTXUNEXPORT;
-
 
 
 /*******************************************
@@ -108,7 +103,6 @@ typedef struct PVRSRV_BRIDGE_IN_DEVMEMINTCTXIMPORT_TAG
 	IMG_HANDLE hDevMemIntCtxExport;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_DEVMEMINTCTXIMPORT;
 
-
 /* Bridge out structure for DevmemIntCtxImport */
 typedef struct PVRSRV_BRIDGE_OUT_DEVMEMINTCTXIMPORT_TAG
 {
@@ -116,7 +110,6 @@ typedef struct PVRSRV_BRIDGE_OUT_DEVMEMINTCTXIMPORT_TAG
 	IMG_HANDLE hPrivData;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_DEVMEMINTCTXIMPORT;
-
 
 
 #endif /* COMMON_CMM_BRIDGE_H */

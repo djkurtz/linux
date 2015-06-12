@@ -250,7 +250,8 @@ static PVRSRV_ERROR PVRSRVDevicePrePowerStateKM_AnyVaCb(PVRSRV_POWER_DEV *psPowe
 	IMG_UINT32				ui32DeviceIndex;
 	PVRSRV_DEV_POWER_STATE	eNewPowerState;
 	IMG_BOOL				bForced;
-	IMG_UINT64				ui32SysTimer1=0, ui32SysTimer2=0, ui32DevTimer1=0, ui32DevTimer2=0;
+	IMG_UINT64				ui64SysTimer1 = 0, ui64SysTimer2 = 0;
+	IMG_UINT64				ui64DevTimer1 = 0, ui64DevTimer2 = 0;
 
 	/*WARNING! if types were not aligned to 4 bytes, this could be dangerous!!!*/
 	bAllDevices = va_arg(va, IMG_BOOL);
@@ -269,14 +270,14 @@ static PVRSRV_ERROR PVRSRVDevicePrePowerStateKM_AnyVaCb(PVRSRV_POWER_DEV *psPowe
 			{
 				/* Call the device's power callback. */
 
-				ui32DevTimer1=OSClockns64();
+				ui64DevTimer1 = OSClockns64();
 
 				eError = psPowerDevice->pfnDevicePrePower(psPowerDevice->hDevCookie,
 															eNewDevicePowerState,
 															psPowerDevice->eCurrentPowerState,
 															bForced);
 
-				ui32DevTimer2=OSClockns64();
+				ui64DevTimer2 = OSClockns64();
 
 				if (eError != PVRSRV_OK)
 				{
@@ -288,29 +289,30 @@ static PVRSRV_ERROR PVRSRVDevicePrePowerStateKM_AnyVaCb(PVRSRV_POWER_DEV *psPowe
 			if (psPowerDevice->pfnSystemPrePower != NULL)
 			{
 
-				ui32SysTimer1=OSClockus();
+				ui64SysTimer1 = OSClockns64();
 
 				eError = psPowerDevice->pfnSystemPrePower(eNewDevicePowerState,
 														  psPowerDevice->eCurrentPowerState,
 														  bForced);
 
-				ui32SysTimer2=OSClockus();
+				ui64SysTimer2 = OSClockns64();
 
 				if (eError != PVRSRV_OK)
 				{
 					return eError;
 				}
 			}
-		}
-	}
 
 #if defined(PVRSRV_ENABLE_PROCESS_STATS)
-    InsertPowerTimeStatistic(PVRSRV_POWER_ENTRY_TYPE_PRE,
-			psPowerDevice->eCurrentPowerState, eNewPowerState,
-            ui32SysTimer1,ui32SysTimer2,
-			ui32DevTimer1,ui32DevTimer2,
-			bForced);
+			InsertPowerTimeStatistic(ui64SysTimer1, ui64SysTimer2,
+			                         ui64DevTimer1, ui64DevTimer2,
+			                         bForced,
+			                         eNewDevicePowerState == PVRSRV_DEV_POWER_STATE_ON,
+			                         IMG_TRUE);
 #endif
+
+		}
+	}
 
 	return  PVRSRV_OK;
 }
@@ -539,7 +541,8 @@ static PVRSRV_ERROR PVRSRVDevicePostPowerStateKM_AnyVaCb(PVRSRV_POWER_DEV *psPow
 	IMG_UINT32				ui32DeviceIndex;
 	PVRSRV_DEV_POWER_STATE	eNewPowerState;
 	IMG_BOOL				bForced;
-	IMG_UINT64				ui32SysTimer1=0, ui32SysTimer2=0, ui32DevTimer1=0, ui32DevTimer2=0;
+	IMG_UINT64				ui64SysTimer1 = 0, ui64SysTimer2 = 0;
+	IMG_UINT64				ui64DevTimer1 = 0, ui64DevTimer2 = 0;
 
 	/*WARNING! if types were not aligned to 4 bytes, this could be dangerous!!!*/
 	bAllDevices = va_arg(va, IMG_BOOL);
@@ -558,13 +561,13 @@ static PVRSRV_ERROR PVRSRVDevicePostPowerStateKM_AnyVaCb(PVRSRV_POWER_DEV *psPow
 			if (psPowerDevice->pfnSystemPostPower != NULL)
 			{
 
-				ui32SysTimer1=OSClockns64();
+				ui64SysTimer1 = OSClockns64();
 
 				eError = psPowerDevice->pfnSystemPostPower(eNewDevicePowerState,
 														   psPowerDevice->eCurrentPowerState,
 														   bForced);
 
-				ui32SysTimer2=OSClockns64();
+				ui64SysTimer2 = OSClockns64();
 
 				if (eError != PVRSRV_OK)
 				{
@@ -576,14 +579,14 @@ static PVRSRV_ERROR PVRSRVDevicePostPowerStateKM_AnyVaCb(PVRSRV_POWER_DEV *psPow
 			{
 				/* Call the device's power callback. */
 
-				ui32DevTimer1=OSClockus();
+				ui64DevTimer1 = OSClockns64();
 
 				eError = psPowerDevice->pfnDevicePostPower(psPowerDevice->hDevCookie,
 														   eNewDevicePowerState,
 														   psPowerDevice->eCurrentPowerState,
 														   bForced);
 
-				ui32DevTimer2=OSClockus();
+				ui64DevTimer2 = OSClockns64();
 
 				if (eError != PVRSRV_OK)
 				{
@@ -591,17 +594,17 @@ static PVRSRV_ERROR PVRSRVDevicePostPowerStateKM_AnyVaCb(PVRSRV_POWER_DEV *psPow
 				}
 			}
 
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+			InsertPowerTimeStatistic(ui64SysTimer1, ui64SysTimer2,
+			                         ui64DevTimer1, ui64DevTimer2,
+			                         bForced,
+			                         eNewDevicePowerState == PVRSRV_DEV_POWER_STATE_ON,
+			                         IMG_FALSE);
+#endif
+
 			psPowerDevice->eCurrentPowerState = eNewDevicePowerState;
 		}
 	}
-
-#if defined(PVRSRV_ENABLE_PROCESS_STATS)
-    InsertPowerTimeStatistic(PVRSRV_POWER_ENTRY_TYPE_POST,
-							psPowerDevice->eCurrentPowerState, eNewPowerState,
-                            ui32SysTimer1,ui32SysTimer2,
-							ui32DevTimer1,ui32DevTimer2,
-							bForced);
-#endif
 
 	return PVRSRV_OK;
 }

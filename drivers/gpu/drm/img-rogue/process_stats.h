@@ -154,17 +154,10 @@ void  PVRSRVStatsUpdateFreelistStats(IMG_UINT32 ui32NumGrowReqByApp,
 									 IMG_PID	ownerPid);
 
 
-typedef enum
-{
-    PVRSRV_POWER_ENTRY_TYPE_PRE,
-    PVRSRV_POWER_ENTRY_TYPE_POST
-} PVRSRV_POWER_ENTRY_TYPE;
-
-void InsertPowerTimeStatistic(PVRSRV_POWER_ENTRY_TYPE bType,
-							  IMG_INT32 ui32CurrentState, IMG_INT32 ui32NextState,
-							  IMG_UINT64 ui64SysStartTime, IMG_UINT64 ui64SysEndTime,
-							  IMG_UINT64 ui64DevStartTime, IMG_UINT64 ui64DevEndTime,
-							  IMG_BOOL bForced);
+/* Update pre/post power transition timing statistics */
+void InsertPowerTimeStatistic(IMG_UINT64 ui64SysStartTime, IMG_UINT64 ui64SysEndTime,
+                              IMG_UINT64 ui64DevStartTime, IMG_UINT64 ui64DevEndTime,
+                              IMG_BOOL bForced, IMG_BOOL bPowerOn, IMG_BOOL bPrePower);
 
 void InsertPowerTimeStatisticExtraPre(IMG_UINT64 ui64StartTimer, IMG_UINT64 ui64Stoptimer);
 void InsertPowerTimeStatisticExtraPost(IMG_UINT64 ui64StartTimer, IMG_UINT64 ui64StopTimer);

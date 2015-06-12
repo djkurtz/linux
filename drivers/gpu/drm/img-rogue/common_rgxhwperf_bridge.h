@@ -52,7 +52,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_hwperf_km.h"
 
 
-
 #define PVRSRV_BRIDGE_RGXHWPERF_CMD_FIRST			0
 #define PVRSRV_BRIDGE_RGXHWPERF_RGXCTRLHWPERF			PVRSRV_BRIDGE_RGXHWPERF_CMD_FIRST+0
 #define PVRSRV_BRIDGE_RGXHWPERF_RGXCONFIGENABLEHWPERFCOUNTERS			PVRSRV_BRIDGE_RGXHWPERF_CMD_FIRST+1
@@ -68,17 +67,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* Bridge in structure for RGXCtrlHWPerf */
 typedef struct PVRSRV_BRIDGE_IN_RGXCTRLHWPERF_TAG
 {
+	IMG_UINT32 ui32StreamId;
 	IMG_BOOL bToggle;
 	IMG_UINT64 ui64Mask;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_RGXCTRLHWPERF;
-
 
 /* Bridge out structure for RGXCtrlHWPerf */
 typedef struct PVRSRV_BRIDGE_OUT_RGXCTRLHWPERF_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_RGXCTRLHWPERF;
-
 
 
 /*******************************************
@@ -92,13 +90,11 @@ typedef struct PVRSRV_BRIDGE_IN_RGXCONFIGENABLEHWPERFCOUNTERS_TAG
 	RGX_HWPERF_CONFIG_CNTBLK * psBlockConfigs;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_RGXCONFIGENABLEHWPERFCOUNTERS;
 
-
 /* Bridge out structure for RGXConfigEnableHWPerfCounters */
 typedef struct PVRSRV_BRIDGE_OUT_RGXCONFIGENABLEHWPERFCOUNTERS_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_RGXCONFIGENABLEHWPERFCOUNTERS;
-
 
 
 /*******************************************
@@ -113,13 +109,11 @@ typedef struct PVRSRV_BRIDGE_IN_RGXCTRLHWPERFCOUNTERS_TAG
 	IMG_UINT16 * pui16BlockIDs;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_RGXCTRLHWPERFCOUNTERS;
 
-
 /* Bridge out structure for RGXCtrlHWPerfCounters */
 typedef struct PVRSRV_BRIDGE_OUT_RGXCTRLHWPERFCOUNTERS_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_RGXCTRLHWPERFCOUNTERS;
-
 
 
 /*******************************************
@@ -134,13 +128,11 @@ typedef struct PVRSRV_BRIDGE_IN_RGXCONFIGCUSTOMCOUNTERS_TAG
 	IMG_UINT32 * pui32CustomCounterIDs;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_RGXCONFIGCUSTOMCOUNTERS;
 
-
 /* Bridge out structure for RGXConfigCustomCounters */
 typedef struct PVRSRV_BRIDGE_OUT_RGXCONFIGCUSTOMCOUNTERS_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_RGXCONFIGCUSTOMCOUNTERS;
-
 
 
 #endif /* COMMON_RGXHWPERF_BRIDGE_H */

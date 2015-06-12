@@ -273,6 +273,8 @@ DevmemCreateHeap(DEVMEM_CONTEXT *psCtxPtr,
                     multiples of this.  We use a client-side RA to
                     make sub-allocations from this */
                  IMG_UINT32 ui32Log2Quantum,
+                 /* The minimum import alignment for this heap */
+                 IMG_UINT32 ui32Log2ImportAlignment,
                  /* Name of heap for debug */
                  /* N.B.  Okay to exist on caller's stack - this
                     func takes a copy if it needs it. */
@@ -531,7 +533,8 @@ DevmemHeapDetails(SHARED_DEV_CONNECTION hDevConnection,
                   IMG_UINT32 uiHeapNameBufSz,
                   IMG_DEV_VIRTADDR *psDevVAddrBaseOut,
                   IMG_DEVMEM_SIZE_T *puiHeapLengthOut,
-                  IMG_UINT32 *puiLog2DataPageSize);
+                  IMG_UINT32 *puiLog2DataPageSize,
+                  IMG_UINT32 *puiLog2ImportAlignmentOut);
 
 /*
  * Devmem_FindHeapByName()
@@ -586,5 +589,19 @@ DevmemLocalImport(IMG_HANDLE hBridge,
 IMG_INTERNAL PVRSRV_ERROR
 DevmemIsDevVirtAddrValid(DEVMEM_CONTEXT *psContext,
                          IMG_DEV_VIRTADDR sDevVAddr);
+
+/* DevmemGetHeapLog2PageSize()
+ *
+ * Get the page size used for a certain heap.
+ */
+IMG_UINT32
+DevmemGetHeapLog2PageSize(DEVMEM_HEAP *psHeap);
+
+/* DevmemGetHeapLog2ImportAlignment()
+ *
+ * Get the import alignment used for a certain heap.
+ */
+IMG_UINT32
+DevmemGetHeapLog2ImportAlignment(DEVMEM_HEAP *psHeap);
 
 #endif /* #ifndef SRVCLIENT_DEVICEMEM_CLIENT_H */

@@ -54,6 +54,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "allocmem.h"
 #include "pdump_km.h"
 #include "pdump_osfunc.h"
+#include "services_km.h"
 
 #include <linux/kernel.h> // sprintf
 #include <linux/string.h> // strncpy, strlen
@@ -188,8 +189,6 @@ PVRSRV_ERROR PDumpOSVSprintf(IMG_CHAR *pszComment, IMG_UINT32 ui32ScriptSizeMax,
 void PDumpOSDebugPrintf(IMG_CHAR* pszFormat, ...)
 {
 	PVR_UNREFERENCED_PARAMETER(pszFormat);
-
-	/* FIXME: Implement using services PVR_DBG or otherwise with kprintf */
 }
 
 /*!
@@ -425,9 +424,9 @@ void PDumpOSSetFrame(IMG_UINT32 ui32Frame)
 	return;
 }
 
-IMG_BOOL PDumpOSAllowInitPhaseToComplete(IMG_UINT32 eModuleID)
+IMG_BOOL PDumpOSAllowInitPhaseToComplete(IMG_BOOL bPDumpClient, IMG_BOOL bInitClient)
 {
- 	return (eModuleID != IMG_PDUMPCTRL);
+	return (bInitClient);
 }
 
 #if defined(PVR_TESTING_UTILS)

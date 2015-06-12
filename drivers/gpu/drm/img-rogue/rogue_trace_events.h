@@ -47,6 +47,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/tracepoint.h>
 #include <linux/time.h>
 
+#define show_secs_from_ns(ns) \
+	({ \
+		u64 t = ns + (NSEC_PER_USEC / 2); \
+		do_div(t, NSEC_PER_SEC); \
+		t; \
+	})
+
+#define show_usecs_from_ns(ns) \
+	({ \
+		u64 t = ns + (NSEC_PER_USEC / 2) ; \
+		u32 rem; \
+		do_div(t, NSEC_PER_USEC); \
+		rem = do_div(t, USEC_PER_SEC); \
+	})
+
 TRACE_EVENT(rogue_fence_update,
 
 	TP_PROTO(const char *comm, const char *cmd, const char *dm, u32 fw_ctx, u32 offset,
@@ -144,6 +159,134 @@ TRACE_EVENT(rogue_create_fw_context,
 		__get_str(dm),
 		(unsigned long)__entry->fw_ctx)
 );
+
+TRACE_EVENT(rogue_ufo_update,
+
+	TP_PROTO(u64 timestamp, u32 fw_ctx, u32 job_id, u32 fwaddr,
+		u32 old_value, u32 new_value),
+
+	TP_ARGS(timestamp, fw_ctx, job_id, fwaddr, old_value, new_value),
+
+	TP_STRUCT__entry(
+		__field(        u64,            timestamp   )
+		__field(        u32,            fw_ctx      )
+		__field(        u32,            job_id )
+		__field(        u32,            fwaddr      )
+		__field(        u32,            old_value   )
+		__field(        u32,            new_value   )
+	),
+
+	TP_fast_assign(
+		__entry->timestamp = timestamp;
+		__entry->fw_ctx = fw_ctx;
+		__entry->job_id = job_id;
+		__entry->fwaddr = fwaddr;
+		__entry->old_value = old_value;
+		__entry->new_value = new_value;
+	),
+
+	TP_printk("ts=%llu.%06lu fw_ctx=%lx job_id=%lu fwaddr=%lx "
+		"old_value=%lx new_value=%lx",
+		(unsigned long long)show_secs_from_ns(__entry->timestamp),
+		(unsigned long)show_usecs_from_ns(__entry->timestamp),
+		(unsigned long)__entry->fw_ctx,
+		(unsigned long)__entry->job_id,
+		(unsigned long)__entry->fwaddr,
+		(unsigned long)__entry->old_value,
+		(unsigned long)__entry->new_value)
+);
+
+DECLARE_EVENT_CLASS(rogue_ufo_check_fail_class,
+
+	TP_PROTO(u64 timestamp, u32 fw_ctx, u32 job_id, u32 fwaddr,
+		u32 value, u32 required),
+
+	TP_ARGS(timestamp, fw_ctx, job_id, fwaddr, value, required),
+
+	TP_STRUCT__entry(
+		__field(        u64,            timestamp   )
+		__field(        u32,            fw_ctx      )
+		__field(        u32,            job_id )
+		__field(        u32,            fwaddr      )
+		__field(        u32,            value       )
+		__field(        u32,            required    )
+	),
+
+	TP_fast_assign(
+		__entry->timestamp = timestamp;
+		__entry->fw_ctx = fw_ctx;
+		__entry->job_id = job_id;
+		__entry->fwaddr = fwaddr;
+		__entry->value = value;
+		__entry->required = required;
+	),
+
+	TP_printk("ts=%llu.%06lu fw_ctx=%lx job_id=%lu fwaddr=%lx "
+		"value=%lx required=%lx",
+		(unsigned long long)show_secs_from_ns(__entry->timestamp),
+		(unsigned long)show_usecs_from_ns(__entry->timestamp),
+		(unsigned long)__entry->fw_ctx,
+		(unsigned long)__entry->job_id,
+		(unsigned long)__entry->fwaddr,
+		(unsigned long)__entry->value,
+		(unsigned long)__entry->required)
+);
+
+DEFINE_EVENT(rogue_ufo_check_fail_class, rogue_ufo_check_fail,
+	TP_PROTO(u64 timestamp, u32 fw_ctx, u32 job_id, u32 fwaddr,
+		u32 value, u32 required),
+	TP_ARGS(timestamp, fw_ctx, job_id, fwaddr, value, required)
+);
+
+DEFINE_EVENT(rogue_ufo_check_fail_class, rogue_ufo_pr_check_fail,
+	TP_PROTO(u64 timestamp, u32 fw_ctx, u32 job_id, u32 fwaddr,
+		u32 value, u32 required),
+	TP_ARGS(timestamp, fw_ctx, job_id, fwaddr, value, required)
+);
+
+DECLARE_EVENT_CLASS(rogue_ufo_check_success_class,
+
+	TP_PROTO(u64 timestamp, u32 fw_ctx, u32 job_id, u32 fwaddr, u32 value),
+
+	TP_ARGS(timestamp, fw_ctx, job_id, fwaddr, value),
+
+	TP_STRUCT__entry(
+		__field(        u64,            timestamp   )
+		__field(        u32,            fw_ctx      )
+		__field(        u32,            job_id )
+		__field(        u32,            fwaddr      )
+		__field(        u32,            value       )
+	),
+
+	TP_fast_assign(
+		__entry->timestamp = timestamp;
+		__entry->fw_ctx = fw_ctx;
+		__entry->job_id = job_id;
+		__entry->fwaddr = fwaddr;
+		__entry->value = value;
+	),
+
+	TP_printk("ts=%llu.%06lu fw_ctx=%lx job_id=%lu fwaddr=%lx value=%lx",
+		(unsigned long long)show_secs_from_ns(__entry->timestamp),
+		(unsigned long)show_usecs_from_ns(__entry->timestamp),
+		(unsigned long)__entry->fw_ctx,
+		(unsigned long)__entry->job_id,
+		(unsigned long)__entry->fwaddr,
+		(unsigned long)__entry->value)
+);
+
+DEFINE_EVENT(rogue_ufo_check_success_class, rogue_ufo_check_success,
+	TP_PROTO(u64 timestamp, u32 fw_ctx, u32 job_id, u32 fwaddr, u32 value),
+	TP_ARGS(timestamp, fw_ctx, job_id, fwaddr, value)
+);
+
+DEFINE_EVENT(rogue_ufo_check_success_class, rogue_ufo_pr_check_success,
+	TP_PROTO(u64 timestamp, u32 fw_ctx, u32 job_id, u32 fwaddr, u32 value),
+	TP_ARGS(timestamp, fw_ctx, job_id, fwaddr, value)
+);
+
+#undef show_secs_from_ns
+#undef show_usecs_from_ns
 
 #endif /* _ROGUE_TRACE_EVENTS_H */
 

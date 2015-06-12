@@ -52,12 +52,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/slab.h>
 #include <stdarg.h>
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-#include <generated/utsrelease.h>
-#else
-#include <linux/utsrelease.h>
-#endif
-
 #include "allocmem.h"
 #include "pvrversion.h"
 #include "img_types.h"
@@ -70,6 +64,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv.h"
 #include "rgxdevice.h"
 #include "rgxdebug.h"
+#include "rgxinit.h"
 #include "lists.h"
 #include "osfunc.h"
 
@@ -304,14 +299,17 @@ void PVRSRVReleasePrintf(const IMG_CHAR *pszFormat, ...)
 	unsigned long ulLockFlags = 0;
 	IMG_CHAR *pszBuf;
 	IMG_UINT32 ui32BufSiz;
+	IMG_INT32  result;
 
 	SelectBuffer(&pszBuf, &ui32BufSiz);
 
 	va_start(vaArgs, pszFormat);
 
 	GetBufferLock(&ulLockFlags);
-	strncpy(pszBuf, "PVR_K: ", (ui32BufSiz - 2));
-	pszBuf[ui32BufSiz - 1] = '\0';
+
+	result = snprintf(pszBuf, (ui32BufSiz - 2), "PVR_K: %u: ", current->pid);
+	PVR_ASSERT(result>0);
+	ui32BufSiz -= result;
 
 	if (VBAppend(pszBuf, ui32BufSiz, pszFormat, vaArgs))
 	{
@@ -340,6 +338,7 @@ void PVRSRVTrace(const IMG_CHAR *pszFormat, ...)
 	unsigned long ulLockFlags = 0;
 	IMG_CHAR *pszBuf;
 	IMG_UINT32 ui32BufSiz;
+	IMG_INT32  result;
 
 	SelectBuffer(&pszBuf, &ui32BufSiz);
 
@@ -347,8 +346,9 @@ void PVRSRVTrace(const IMG_CHAR *pszFormat, ...)
 
 	GetBufferLock(&ulLockFlags);
 
-	strncpy(pszBuf, "PVR: ", (ui32BufSiz - 2));
-	pszBuf[ui32BufSiz - 1] = '\0';
+	result = snprintf(pszBuf, (ui32BufSiz - 2), "PVR: %u: ", current->pid);
+	PVR_ASSERT(result>0);
+	ui32BufSiz -= result;
 
 	if (VBAppend(pszBuf, ui32BufSiz, pszFormat, VArgs))
 	{
@@ -465,8 +465,14 @@ void PVRSRVDebugPrintf(IMG_UINT32 ui32DebugLevel,
 		}
 		pszBuf[ui32BufSiz - 1] = '\0';
 
-		(void) BAppend(pszBuf, ui32BufSiz, "%u: ", current->pid);
-
+		if (current->pid == task_tgid_nr(current))
+		{
+			(void) BAppend(pszBuf, ui32BufSiz, "%u: ", current->pid);
+		}
+		else
+		{
+			(void) BAppend(pszBuf, ui32BufSiz, "%u-%u: ", task_tgid_nr(current) /* pid id of group*/, current->pid /* task id */);
+		}
 
 		if (VBAppend(pszBuf, ui32BufSiz, pszFormat, vaArgs))
 		{
@@ -474,6 +480,8 @@ void PVRSRVDebugPrintf(IMG_UINT32 ui32DebugLevel,
 		}
 		else
 		{
+			IMG_BOOL bTruncated = IMG_FALSE;
+
 #if !defined(__sh__)
 			pszLeafName = (IMG_CHAR *)strrchr (pszFileName, '/');
 
@@ -483,7 +491,23 @@ void PVRSRVDebugPrintf(IMG_UINT32 ui32DebugLevel,
 			}
 #endif /* __sh__ */
 
-			if (BAppend(pszBuf, ui32BufSiz, " [%u, %s]", ui32Line, pszFileName))
+#if defined(DEBUG)
+			{
+				static const IMG_CHAR *lastFile = NULL;
+
+				if (lastFile == pszFileName)
+				{
+					bTruncated = BAppend(pszBuf, ui32BufSiz, " [%u]", ui32Line);
+				}
+				else
+				{
+					bTruncated = BAppend(pszBuf, ui32BufSiz, " [%s:%u]", pszFileName, ui32Line);
+					lastFile = pszFileName;
+				}
+			}
+#endif
+
+			if (bTruncated)
 			{
 				printk(KERN_ERR "PVR_K:(Message Truncated): %s\n", pszBuf);
 			}
@@ -567,17 +591,31 @@ static void *_DebugVersionSeqNext(struct seq_file *psSeqFile,
 
 static int _DebugVersionSeqShow(struct seq_file *psSeqFile, void *pvData)
 {
+	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
+
 	if (pvData == SEQ_START_TOKEN)
 	{
 		const IMG_CHAR *pszSystemVersionString = PVRSRVGetSystemName();
 
-		seq_printf(psSeqFile, "Version: %s (%s) %s\n",
-			   PVRVERSION_STRING,
-			   PVR_BUILD_TYPE, PVR_BUILD_DIR);
+		if(psPVRSRVData->sDriverInfo.bIsNoMatch)
+		{
+			seq_printf(psSeqFile, "UM Version: %d (%s) %s\n",
+					psPVRSRVData->sDriverInfo.sUMBuildInfo.ui32BuildRevision,
+				    (psPVRSRVData->sDriverInfo.sUMBuildInfo.ui32BuildType)?"release":"debug",
+				    PVR_BUILD_DIR);
+			seq_printf(psSeqFile, "KM Version: %d (%s) %s\n",
+								psPVRSRVData->sDriverInfo.sKMBuildInfo.ui32BuildRevision,
+							    (BUILD_TYPE_RELEASE == psPVRSRVData->sDriverInfo.sKMBuildInfo.ui32BuildType)?"release":"debug",
+							    PVR_BUILD_DIR);
+		}else
+		{
+			seq_printf(psSeqFile, "Version: %s (%s) %s\n",
+						   PVRVERSION_STRING,
+						   PVR_BUILD_TYPE, PVR_BUILD_DIR);
+		}
 
 		seq_printf(psSeqFile, "System Version String: %s\n", pszSystemVersionString);
 
-		seq_printf(psSeqFile, "Kernel Version: " UTS_RELEASE "\n");
 	}
 	else if (pvData != NULL)
 	{
@@ -586,11 +624,11 @@ static int _DebugVersionSeqShow(struct seq_file *psSeqFile, void *pvData)
 		if (psDevNode->pfnDeviceVersionString)
 		{
 			IMG_CHAR *pszDeviceVersionString;
-			
+
 			if (psDevNode->pfnDeviceVersionString(psDevNode, &pszDeviceVersionString) == PVRSRV_OK)
 			{
 				seq_printf(psSeqFile, "%s\n", pszDeviceVersionString);
-				
+
 				OSFreeMem(pszDeviceVersionString);
 			}
 		}
@@ -721,6 +759,14 @@ static int _DebugStatusSeqShow(struct seq_file *psSeqFile, void *pvData)
 
 			seq_printf(psSeqFile, "Firmware Status: %s%s\n", pszStatus, pszReason);
 
+#if defined(PVRSRV_GPUVIRT_GUESTDRV)
+			/*
+			 * Guest drivers do not support the following functionality:
+			 * 	- Perform actual on-chip fw tracing
+			 * 	- Collect actual on-chip GPU utilization stats
+			 * 	- Perform actual on-chip GPU power/dvfs management
+			 */
+#else
 			/* Write other useful stats to aid the test cycle... */
 			if (psDeviceNode->pvDevice != NULL)
 			{
@@ -748,23 +794,15 @@ static int _DebugStatusSeqShow(struct seq_file *psSeqFile, void *pvData)
 				seq_printf(psSeqFile, "APM Event Count: %d\n", psDevInfo->ui32ActivePMReqTotal);
 
 				/* Write the current GPU Utilisation values... */
-				if (psDevInfo->pfnRegisterGpuUtilStats && psDevInfo->pfnGetGpuUtilStats &&
+				if (psDevInfo->pfnGetGpuUtilStats &&
 				    psDeviceNode->eHealthStatus == PVRSRV_DEVICE_HEALTH_STATUS_OK)
 				{
 					RGXFWIF_GPU_UTIL_STATS sGpuUtilStats;
 					PVRSRV_ERROR eError = PVRSRV_OK;
 
-					if (ghGpuUtilUserDebugFS == NULL)
-					{
-						eError = psDevInfo->pfnRegisterGpuUtilStats(&ghGpuUtilUserDebugFS);
-					}
-
-					if (eError == PVRSRV_OK)
-					{
-						eError = psDevInfo->pfnGetGpuUtilStats(psDeviceNode,
-															   ghGpuUtilUserDebugFS,
-															   &sGpuUtilStats);
-					}
+					eError = psDevInfo->pfnGetGpuUtilStats(psDeviceNode,
+					                                       ghGpuUtilUserDebugFS,
+					                                       &sGpuUtilStats);
 
 					if ((eError == PVRSRV_OK) &&
 					    ((IMG_UINT32)sGpuUtilStats.ui64GpuStatCumulative))
@@ -784,6 +822,7 @@ static int _DebugStatusSeqShow(struct seq_file *psSeqFile, void *pvData)
 					}
 				}
 			}
+#endif
 		}
 		else
 		{
@@ -1165,6 +1204,13 @@ int PVRDebugCreateDebugFSEntries(void)
 	PVR_ASSERT(psPVRSRVData != NULL);
 	PVR_ASSERT(gpsVersionDebugFSEntry == NULL);
 
+#if !defined(NO_HARDWARE)
+	if (RGXRegisterGpuUtilStats(&ghGpuUtilUserDebugFS) != PVRSRV_OK)
+	{
+		return -ENOMEM;
+	}
+#endif
+
 	iResult = PVRDebugFSCreateEntry("version",
 									NULL,
 									&gsDebugVersionReadOps,
@@ -1255,19 +1301,9 @@ ErrorRemoveVersionEntry:
 
 void PVRDebugRemoveDebugFSEntries(void)
 {
-	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
-	PVRSRV_DEVICE_NODE *psDeviceNode;
-	PVRSRV_RGXDEV_INFO *psDevInfo;
-
-	psDeviceNode = psPVRSRVData->apsRegisteredDevNodes[0];
-	if (psDeviceNode)
-	{
-		psDevInfo = psDeviceNode->pvDevice;
-		if (psDevInfo && psDevInfo->pfnUnregisterGpuUtilStats)
-		{
-			psDevInfo->pfnUnregisterGpuUtilStats(ghGpuUtilUserDebugFS);
-		}
-	}
+#if !defined(NO_HARDWARE)
+	RGXUnregisterGpuUtilStats(ghGpuUtilUserDebugFS);
+#endif
 
 #if defined(DEBUG)
 	if (gpsDebugLevelDebugFSEntry != NULL)

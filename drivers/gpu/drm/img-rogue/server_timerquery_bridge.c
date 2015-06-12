@@ -174,6 +174,7 @@ PVRSRVBridgeRGXCurrentTime(IMG_UINT32 ui32DispatchTableEntry,
  * Server bridge dispatch related glue 
  */
 
+static IMG_BOOL bUseLock = IMG_TRUE;
 
 PVRSRV_ERROR InitTIMERQUERYBridge(void);
 PVRSRV_ERROR DeinitTIMERQUERYBridge(void);
@@ -185,20 +186,16 @@ PVRSRV_ERROR InitTIMERQUERYBridge(void)
 {
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_TIMERQUERY, PVRSRV_BRIDGE_TIMERQUERY_RGXBEGINTIMERQUERY, PVRSRVBridgeRGXBeginTimerQuery,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_TIMERQUERY, PVRSRV_BRIDGE_TIMERQUERY_RGXENDTIMERQUERY, PVRSRVBridgeRGXEndTimerQuery,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_TIMERQUERY, PVRSRV_BRIDGE_TIMERQUERY_RGXQUERYTIMER, PVRSRVBridgeRGXQueryTimer,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_TIMERQUERY, PVRSRV_BRIDGE_TIMERQUERY_RGXCURRENTTIME, PVRSRVBridgeRGXCurrentTime,
-					NULL, NULL,
-					0, 0);
+					NULL, bUseLock);
 
 
 	return PVRSRV_OK;

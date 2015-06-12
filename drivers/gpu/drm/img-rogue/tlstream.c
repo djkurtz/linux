@@ -181,16 +181,16 @@ TLStreamCreate(IMG_HANDLE *phStream,
 
 	psTmp->bNoSignalOnCommit = (ui32StreamFlags&TL_FLAG_NO_SIGNAL_ON_COMMIT) ?  IMG_TRUE : IMG_FALSE;
 
-	if ( ui32StreamFlags & TL_FLAG_DROP_DATA ) 
+	if ( ui32StreamFlags & TL_FLAG_RESERVE_DROP_NEWER ) 
 	{
-		if ( ui32StreamFlags & TL_FLAG_BLOCKING_RESERVE ) 
+		if ( ui32StreamFlags & TL_FLAG_RESERVE_BLOCK ) 
 		{
 			eError = PVRSRV_ERROR_INVALID_PARAMS;
 			goto e1;
 		}
 		psTmp->bDrop = IMG_TRUE;
 	}
-	else if ( ui32StreamFlags & TL_FLAG_BLOCKING_RESERVE ) 
+	else if ( ui32StreamFlags & TL_FLAG_RESERVE_BLOCK ) 
     {	/* Additional synchronization object required for this kind of stream */
         psTmp->bBlock = IMG_TRUE;
     }
@@ -319,9 +319,9 @@ TLStreamReconfigure(
 	psTmp->ui32Pending = 0;
 	OSLockRelease (psTmp->hStreamLock);
 
-	if ( ui32StreamFlags & TL_FLAG_DROP_DATA )
+	if ( ui32StreamFlags & TL_FLAG_RESERVE_DROP_NEWER )
 	{
-		if ( ui32StreamFlags & TL_FLAG_BLOCKING_RESERVE )
+		if ( ui32StreamFlags & TL_FLAG_RESERVE_BLOCK )
 		{
 			eError = PVRSRV_ERROR_INVALID_PARAMS;
 			goto e1;
@@ -329,7 +329,7 @@ TLStreamReconfigure(
 		psTmp->bDrop = IMG_TRUE;
 		psTmp->bBlock = IMG_FALSE;
 	}
-	else if ( ui32StreamFlags & TL_FLAG_BLOCKING_RESERVE )
+	else if ( ui32StreamFlags & TL_FLAG_RESERVE_BLOCK )
 	{
 		psTmp->bBlock = IMG_TRUE;
 		psTmp->bDrop = IMG_FALSE;
@@ -395,7 +395,7 @@ TLStreamClose(IMG_HANDLE hStream)
 	if ( NULL == hStream )
 	{
 		PVR_DPF((PVR_DBG_WARNING,
-				 "TLStreamClose failed as NULL stream handler passed, nothing done.\n"));
+				 "TLStreamClose failed as NULL stream handler passed, nothing done."));
 		PVR_DPF_RETURN;
 	}
 
@@ -509,7 +509,7 @@ DoTLStreamReserve(IMG_HANDLE hStream,
 			*pui32AvSpace = suggestAllocSize(ui32LRead, ui32LWrite, psTmp->ui32Size, ui32ReqSizeMin);
 		}
 		OSLockRelease (psTmp->hStreamLock);
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_MISUSE);
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_RESERVE_TOO_BIG);
 	}
 
 	/* Prevent other threads from entering this region before we are done updating
@@ -626,6 +626,7 @@ DoTLStreamReserve(IMG_HANDLE hStream,
 				pui32Buf = (IMG_UINT32*)&psTmp->pbyBuffer[ui32LWrite];
 				*pui32Buf = PVRSRVTL_SET_PACKET_WRITE_FAILED ;
 				ui32LWrite += sizeof(PVRSRVTL_PACKETHDR);
+				ui32LWrite %= psTmp->ui32Size;
 				iFreeSpace -= sizeof(PVRSRVTL_PACKETHDR);
 			}
 
@@ -638,7 +639,7 @@ DoTLStreamReserve(IMG_HANDLE hStream,
 			{
 				*pui32AvSpace = suggestAllocSize(ui32LRead, ui32LWrite, psTmp->ui32Size, ui32ReqSizeMin);
 			}
-			PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_FULL);
+			PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_RESERVE_TOO_BIG);
 		} 
 	}
 
@@ -782,7 +783,7 @@ TLStreamWrite(IMG_HANDLE hStream, IMG_UINT8 *pui8Src, IMG_UINT32 ui32Size)
 	else
 	{
 		/* A NULL ptr returned from TLStreamReserve indicates the TL buffer is full */
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_FULL);
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_RESERVE_TOO_BIG);
 	}
 	PVR_DPF_RETURN_OK;
 }

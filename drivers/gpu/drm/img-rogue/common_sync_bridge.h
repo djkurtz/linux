@@ -53,7 +53,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem_typedefs.h"
 
 
-
 #define PVRSRV_BRIDGE_SYNC_CMD_FIRST			0
 #define PVRSRV_BRIDGE_SYNC_ALLOCSYNCPRIMITIVEBLOCK			PVRSRV_BRIDGE_SYNC_CMD_FIRST+0
 #define PVRSRV_BRIDGE_SYNC_FREESYNCPRIMITIVEBLOCK			PVRSRV_BRIDGE_SYNC_CMD_FIRST+1
@@ -88,7 +87,6 @@ typedef struct PVRSRV_BRIDGE_IN_ALLOCSYNCPRIMITIVEBLOCK_TAG
 	 IMG_UINT32 ui32EmptyStructPlaceholder;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_ALLOCSYNCPRIMITIVEBLOCK;
 
-
 /* Bridge out structure for AllocSyncPrimitiveBlock */
 typedef struct PVRSRV_BRIDGE_OUT_ALLOCSYNCPRIMITIVEBLOCK_TAG
 {
@@ -98,7 +96,6 @@ typedef struct PVRSRV_BRIDGE_OUT_ALLOCSYNCPRIMITIVEBLOCK_TAG
 	IMG_HANDLE hhSyncPMR;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_ALLOCSYNCPRIMITIVEBLOCK;
-
 
 
 /*******************************************
@@ -111,13 +108,11 @@ typedef struct PVRSRV_BRIDGE_IN_FREESYNCPRIMITIVEBLOCK_TAG
 	IMG_HANDLE hSyncHandle;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_FREESYNCPRIMITIVEBLOCK;
 
-
 /* Bridge out structure for FreeSyncPrimitiveBlock */
 typedef struct PVRSRV_BRIDGE_OUT_FREESYNCPRIMITIVEBLOCK_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_FREESYNCPRIMITIVEBLOCK;
-
 
 
 /*******************************************
@@ -132,13 +127,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMSET_TAG
 	IMG_UINT32 ui32Value;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMSET;
 
-
 /* Bridge out structure for SyncPrimSet */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMSET_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMSET;
-
 
 
 /*******************************************
@@ -152,13 +145,11 @@ typedef struct PVRSRV_BRIDGE_IN_SERVERSYNCPRIMSET_TAG
 	IMG_UINT32 ui32Value;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SERVERSYNCPRIMSET;
 
-
 /* Bridge out structure for ServerSyncPrimSet */
 typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCPRIMSET_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SERVERSYNCPRIMSET;
-
 
 
 /*******************************************
@@ -171,13 +162,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCRECORDREMOVEBYHANDLE_TAG
 	IMG_HANDLE hhRecord;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCRECORDREMOVEBYHANDLE;
 
-
 /* Bridge out structure for SyncRecordRemoveByHandle */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCRECORDREMOVEBYHANDLE_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCRECORDREMOVEBYHANDLE;
-
 
 
 /*******************************************
@@ -195,14 +184,12 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCRECORDADD_TAG
 	const IMG_CHAR * puiClassName;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCRECORDADD;
 
-
 /* Bridge out structure for SyncRecordAdd */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCRECORDADD_TAG
 {
 	IMG_HANDLE hhRecord;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCRECORDADD;
-
 
 
 /*******************************************
@@ -216,7 +203,6 @@ typedef struct PVRSRV_BRIDGE_IN_SERVERSYNCALLOC_TAG
 	const IMG_CHAR * puiClassName;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SERVERSYNCALLOC;
 
-
 /* Bridge out structure for ServerSyncAlloc */
 typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCALLOC_TAG
 {
@@ -224,7 +210,6 @@ typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCALLOC_TAG
 	IMG_UINT32 ui32SyncPrimVAddr;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SERVERSYNCALLOC;
-
 
 
 /*******************************************
@@ -237,13 +222,11 @@ typedef struct PVRSRV_BRIDGE_IN_SERVERSYNCFREE_TAG
 	IMG_HANDLE hSyncHandle;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SERVERSYNCFREE;
 
-
 /* Bridge out structure for ServerSyncFree */
 typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCFREE_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SERVERSYNCFREE;
-
 
 
 /*******************************************
@@ -257,7 +240,6 @@ typedef struct PVRSRV_BRIDGE_IN_SERVERSYNCQUEUEHWOP_TAG
 	IMG_BOOL bbUpdate;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SERVERSYNCQUEUEHWOP;
 
-
 /* Bridge out structure for ServerSyncQueueHWOp */
 typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCQUEUEHWOP_TAG
 {
@@ -265,7 +247,6 @@ typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCQUEUEHWOP_TAG
 	IMG_UINT32 ui32UpdateValue;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SERVERSYNCQUEUEHWOP;
-
 
 
 /*******************************************
@@ -287,7 +268,6 @@ typedef struct PVRSRV_BRIDGE_IN_SERVERSYNCGETSTATUS_TAG
 	IMG_UINT32 * pui32NextOp;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SERVERSYNCGETSTATUS;
 
-
 /* Bridge out structure for ServerSyncGetStatus */
 typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCGETSTATUS_TAG
 {
@@ -297,7 +277,6 @@ typedef struct PVRSRV_BRIDGE_OUT_SERVERSYNCGETSTATUS_TAG
 	IMG_UINT32 * pui32NextOp;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SERVERSYNCGETSTATUS;
-
 
 
 /*******************************************
@@ -316,14 +295,12 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMOPCREATE_TAG
 	IMG_HANDLE * phServerSync;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMOPCREATE;
 
-
 /* Bridge out structure for SyncPrimOpCreate */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMOPCREATE_TAG
 {
 	IMG_HANDLE hServerCookie;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMOPCREATE;
-
 
 
 /*******************************************
@@ -342,13 +319,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMOPTAKE_TAG
 	IMG_UINT32 * pui32ServerFlags;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMOPTAKE;
 
-
 /* Bridge out structure for SyncPrimOpTake */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMOPTAKE_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMOPTAKE;
-
 
 
 /*******************************************
@@ -361,14 +336,12 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMOPREADY_TAG
 	IMG_HANDLE hServerCookie;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMOPREADY;
 
-
 /* Bridge out structure for SyncPrimOpReady */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMOPREADY_TAG
 {
 	IMG_BOOL bReady;
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMOPREADY;
-
 
 
 /*******************************************
@@ -381,13 +354,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMOPCOMPLETE_TAG
 	IMG_HANDLE hServerCookie;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMOPCOMPLETE;
 
-
 /* Bridge out structure for SyncPrimOpComplete */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMOPCOMPLETE_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMOPCOMPLETE;
-
 
 
 /*******************************************
@@ -400,13 +371,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMOPDESTROY_TAG
 	IMG_HANDLE hServerCookie;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMOPDESTROY;
 
-
 /* Bridge out structure for SyncPrimOpDestroy */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMOPDESTROY_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMOPDESTROY;
-
 
 
 /*******************************************
@@ -420,13 +389,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMPDUMP_TAG
 	IMG_UINT32 ui32Offset;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMPDUMP;
 
-
 /* Bridge out structure for SyncPrimPDump */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMP_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMP;
-
 
 
 /*******************************************
@@ -441,13 +408,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPVALUE_TAG
 	IMG_UINT32 ui32Value;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPVALUE;
 
-
 /* Bridge out structure for SyncPrimPDumpValue */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMPVALUE_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMPVALUE;
-
 
 
 /*******************************************
@@ -465,13 +430,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPPOL_TAG
 	PDUMP_FLAGS_T uiPDumpFlags;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPPOL;
 
-
 /* Bridge out structure for SyncPrimPDumpPol */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMPPOL_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMPPOL;
-
 
 
 /*******************************************
@@ -486,13 +449,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMOPPDUMPPOL_TAG
 	PDUMP_FLAGS_T uiPDumpFlags;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMOPPDUMPPOL;
 
-
 /* Bridge out structure for SyncPrimOpPDumpPol */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMOPPDUMPPOL_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMOPPDUMPPOL;
-
 
 
 /*******************************************
@@ -509,13 +470,11 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPCBP_TAG
 	IMG_DEVMEM_SIZE_T uiBufferSize;
 } __attribute__((packed)) PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPCBP;
 
-
 /* Bridge out structure for SyncPrimPDumpCBP */
 typedef struct PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMPCBP_TAG
 {
 	PVRSRV_ERROR eError;
 } __attribute__((packed)) PVRSRV_BRIDGE_OUT_SYNCPRIMPDUMPCBP;
-
 
 
 #endif /* COMMON_SYNC_BRIDGE_H */
