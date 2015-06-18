@@ -127,6 +127,11 @@
 		pinctrl-0 = <&aud_i2s2>;
 	};
 
+	sound-hdmi {
+		compatible = "mediatek,mt8173-hdmi-card";
+		mediatek,platform = <&afe>;
+	};
+
 	spi_gpio0: ec@0 {
 		compatible = "spi-gpio";
 		#address-cells = <0x1>;
