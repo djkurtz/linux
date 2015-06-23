@@ -86,6 +86,30 @@
 		};
 	};
 
+	panel: panel {
+		compatible = "innolux,n116bge";
+		power-supply = <&panel_fixed_3v3>;
+		ddc-i2c-bus = <&i2c4>;
+	};
+
+	panel_fixed_3v3: regulator@1 {
+		compatible = "regulator-fixed";
+		regulator-name = "PANEL_3V3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		enable-active-high;
+		gpio = <&pio 41 0>;
+	};
+
+	ps8640_fixed_1v2: regulator@2 {
+		compatible = "regulator-fixed";
+		regulator-name = "PS8640_1V2";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		enable-active-high;
+		gpio = <&pio 30 0>;
+	};
+
 	sdio_fixed_3v3: fixedregulator@0 {
 		compatible = "regulator-fixed";
 		regulator-name = "3V3";
@@ -151,6 +175,23 @@
 &cpu3 {
 	proc-supply = <&mt6311_vcpu_reg>;
 	sram-supply = <&mt6397_vsramca7_reg>;
+};
+
+&dsi {
+	mediatek,width = <1368>;
+	mediatek,height = <768>;
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port@1 {
+			reg = <1>;
+
+			dsi_out: endpoint {
+				remote-endpoint = <&ps8640_in>;
+			};
+		};
+	};
 };
 
 &gpu {
@@ -230,6 +271,24 @@
 		reg = <0x15>;
 		vcc-supply = <&mt6397_vgp6_reg>;
 		wakeup-source;
+	};
+
+	ps8640: edp-bridge@18 {
+		compatible = "parade,ps8640";
+		reg = <0x18>;
+		edid_reg = <0x50>;
+		power-gpios = <&pio 116 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&pio 115 GPIO_ACTIVE_HIGH>;
+		mode-sel-gpios = <&pio 92 GPIO_ACTIVE_HIGH>;
+		ps8640-1v2-supply = <&ps8640_fixed_1v2>;
+		ps8640-3v3-supply = <&mt6397_vgp2_reg>;
+		mediatek,panel = <&panel>;
+
+		port {
+			ps8640_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
 	};
 
 	thermal@4c {
@@ -660,10 +719,9 @@
 			mt6397_vgp2_reg: ldo_vgp2 {
 				regulator-compatible = "ldo_vgp2";
 				regulator-name = "vcamio";
-				regulator-min-microvolt = <1800000>;
-				regulator-max-microvolt = <1800000>;
+				regulator-min-microvolt = <3300000>;
+				regulator-max-microvolt = <3300000>;
 				regulator-enable-ramp-delay = <218>;
-				regulator-always-on;
 			};
 
 			mt6397_vgp3_reg: ldo_vgp3 {
