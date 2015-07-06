@@ -1,0 +1,38 @@
+Mediatek CRTC Main Device
+================================
+
+The Mediatek CRTC Main device is a crtc device of DRM system.
+
+Required properties:
+- compatible: "mediatek,<chip>-crtc-main"
+- interrupts: The interrupt signal from the CRTC Main block.
+- reg: Physical base address and length of the controller's registers
+- clocks: device clocks
+  See Documentation/devicetree/bindings/clock/clock-bindings.txt for details.
+- ddp: phandle of ddp device which control display data path.
+
+Example:
+
+crtc_main: crtc@1400c000 {
+	compatible = "mediatek,mt8173-crtc-main";
+	interrupts = <GIC_SPI 196 IRQ_TYPE_LEVEL_LOW>;
+	reg = <0 0x1400c000 0 0x1000>,	/* OVL0 */
+	      <0 0x1400e000 0 0x1000>,	/* RDMA0 */
+	      <0 0x14013000 0 0x1000>,	/* COLOR0 */
+	      <0 0x14015000 0 0x1000>,	/* AAL */
+	      <0 0x1401a000 0 0x1000>,	/* UFOE */
+	      <0 0x14023000 0 0x1000>;	/* OD */
+	clocks = <&mmsys MM_DISP_OVL0>,
+		 <&mmsys MM_DISP_RDMA0>,
+		 <&mmsys MM_DISP_COLOR0>,
+		 <&mmsys MM_DISP_AAL>,
+		 <&mmsys MM_DISP_UFOE>,
+		 <&mmsys MM_DISP_OD>;
+	clock-names = "ovl0_disp",
+		      "rdma0_disp",
+		      "color0_disp",
+		      "aal_disp",
+		      "ufoe_disp",
+		      "od_disp";
+	ddp = <&ddp>;
+};

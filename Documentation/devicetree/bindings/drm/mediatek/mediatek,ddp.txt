@@ -1,0 +1,22 @@
+Mediatek DDP Device
+================================
+
+The Mediatek DDP device control the display data path.
+
+Required properties:
+- compatible: "mediatek,<chip>-ddp"
+- reg: Physical base address and length of the controller's registers
+- power-domains: a phandle to DDP power domain node.
+- clocks: device clocks
+  See Documentation/devicetree/bindings/clock/clock-bindings.txt for details.
+
+Example:
+
+ddp: ddp@14000000 {
+	compatible = "mediatek,mt8173-ddp";
+	reg = <0 0x14000000 0 0x100>,	/* CONFIG */
+	      <0 0x14020000 0 0x1000>;	/* MUTEX */
+	power-domains = <&scpsys MT8173_POWER_DOMAIN_DIS>;
+	clocks = <&mmsys MM_MUTEX_32K>;
+	clock-names = "mutex_disp";
+};

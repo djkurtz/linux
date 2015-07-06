@@ -1,0 +1,27 @@
+Mediatek DRM Device
+================================
+
+The Mediatek DRM device is a device needed to list all
+display component nodes that comprise the display subsystem.
+And it list the memory-related interface.
+
+Required properties:
+- compatible: "mediatek,<chip>-drm"
+- larb: Should contain a list of phandles pointing to larb device.
+  larb definitions as defined in
+  Documentation/devicetree/bindings/soc/mediatek/mediatek,smi-larb.txt
+- iommus: required a iommu node
+- connectors: Should contain a list of phandles pointing to connector device.
+  connector device should be one component of this master.
+- crtcs: Should contain a list of phandles pointing to crtc device.
+  crtc device should be one component of this master.
+
+Example:
+
+drm0: drm {
+	compatible = "mediatek,mt8173-drm";
+	larb = <&larb0>;
+	iommus = <&iommu M4U_PORT_DISP_OVL0>;
+	connectors = <&dsi>;
+	crtcs = <&crtc_main>;
+};
