@@ -20,6 +20,14 @@
 	compatible = "google,oak-rev2", "google,oak", "mediatek,mt8173";
 };
 
+&backlight_lcd {
+	power-supply = <&mt6397_vio18_reg>;
+};
+
+&bl_fixed_reg {
+	status = "disabled";
+};
+
 &cpu2 {
 	proc-supply = <&da9211_vcpu_reg>;
 };

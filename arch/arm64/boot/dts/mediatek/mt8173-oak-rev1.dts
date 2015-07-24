@@ -20,6 +20,14 @@
 	compatible = "google,oak-rev1", "google,oak", "mediatek,mt8173";
 };
 
+&backlight_lcd {
+	/delete-property/ power-supply; /* Not used on oak-rev1 */
+};
+
+&bl_fixed_reg {
+	status = "disabled";
+};
+
 &cpu2 {
 	proc-supply = <&da9211_vcpu_reg>;
 	operating-points = <
