@@ -28,7 +28,7 @@
 
 int iommu_dma_init(void)
 {
-	return iova_cache_get();
+	return iommu_iova_cache_init();
 }
 
 /**
