@@ -587,7 +587,7 @@ static const struct mtk_composite top_muxes[] __initconst = {
 	MUX(CLK_TOP_I2S3_B_SEL, "i2s3_b_ck_sel", i2s3_b_ck_parents, 0x120, 8, 1),
 };
 
-static const struct mtk_gate_regs infra_cg_regs = {
+static const struct mtk_gate_regs infra_cg_regs __initconst = {
 	.set_ofs = 0x0040,
 	.clr_ofs = 0x0044,
 	.sta_ofs = 0x0048,
@@ -616,13 +616,13 @@ static const struct mtk_gate infra_clks[] __initconst = {
 	GATE_ICG(CLK_INFRA_PMICWRAP, "infra_pmicwrap", "axi_sel", 23),
 };
 
-static const struct mtk_gate_regs peri0_cg_regs = {
+static const struct mtk_gate_regs peri0_cg_regs __initconst = {
 	.set_ofs = 0x0008,
 	.clr_ofs = 0x0010,
 	.sta_ofs = 0x0018,
 };
 
-static const struct mtk_gate_regs peri1_cg_regs = {
+static const struct mtk_gate_regs peri1_cg_regs __initconst = {
 	.set_ofs = 0x000c,
 	.clr_ofs = 0x0014,
 	.sta_ofs = 0x001c,
