@@ -1,0 +1,13 @@
+/*
+ * This header provides constants for mediatek,mt8173-thermal
+ */
+
+#ifndef _DT_BINDINGS_THERMAL_MEDIATEK_MT8173_H
+#define _DT_BINDINGS_THERMAL_MEDIATEK_MT8173_H
+
+#define MT8173_THERMAL_ZONE_CA53	0
+#define MT8173_THERMAL_ZONE_CA57	1
+#define MT8173_THERMAL_ZONE_GPU		2
+#define MT8173_THERMAL_ZONE_CORE	3
+
+#endif /* _DT_BINDINGS_THERMAL_MEDIATEK_MT8173_H */
