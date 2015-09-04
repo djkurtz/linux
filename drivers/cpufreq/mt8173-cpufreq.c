@@ -28,7 +28,8 @@
 #define MAX_VOLT_SHIFT		(200000)
 #define MAX_VOLT_LIMIT		(1150000)
 #define VOLT_TOL		(10000)
-
+#define CAPACITANCE_CA53	(263)
+#define CAPACITANCE_CA57	(530)
 /*
  * The struct mtk_cpu_dvfs_info holds necessary information for doing CPU DVFS
  * on each CPU power/clock domain of Mediatek SoCs. Each CPU cluster in
@@ -50,6 +51,72 @@ struct mtk_cpu_dvfs_info {
 	int intermediate_voltage;
 	bool need_voltage_tracking;
 };
+
+struct mtk_cpu_static_power {
+	unsigned long voltage;
+	unsigned int power;
+};
+
+/* measured by WA program. */
+static const struct mtk_cpu_static_power mtk_ca53_static_power[] = {
+	{859000, 43},
+	{908000, 52},
+	{983000, 86},
+	{1009000, 123},
+	{1028000, 138},
+	{1083000, 172},
+	{1109000, 180},
+	{1125000, 192},
+};
+
+/* measured by WA program. */
+static const struct mtk_cpu_static_power mtk_ca57_static_power[] = {
+	{828000, 72},
+	{867000, 90},
+	{927000, 156},
+	{968000, 181},
+	{1007000, 298},
+	{1049000, 435},
+	{1089000, 533},
+	{1125000, 533},
+};
+
+unsigned int mtk_cpufreq_lookup_power(const struct mtk_cpu_static_power *table,
+		unsigned int count, unsigned long voltage)
+{
+	int i;
+
+	for (i = 0; i < count; i++) {
+		if (voltage <= table[i].voltage)
+			return table[i].power;
+	}
+
+	return table[count - 1].power;
+}
+
+int mtk_cpufreq_get_static(cpumask_t *cpumask, int interval,
+		unsigned long voltage, u32 *power)
+{
+	int nr_cpus = cpumask_weight(cpumask);
+
+	*power = 0;
+
+	if (nr_cpus) {
+
+		if (cpumask_test_cpu(0, cpumask))
+			*power += mtk_cpufreq_lookup_power(
+				mtk_ca53_static_power,
+				ARRAY_SIZE(mtk_ca53_static_power),
+				voltage);
+
+		if (cpumask_test_cpu(2, cpumask))
+			*power += mtk_cpufreq_lookup_power(
+				mtk_ca57_static_power,
+				ARRAY_SIZE(mtk_ca57_static_power),
+				voltage);
+	}
+	return 0;
+}
 
 static int mtk_cpufreq_voltage_tracking(struct mtk_cpu_dvfs_info *info,
 					int new_vproc)
@@ -272,15 +339,21 @@ static void mtk_cpufreq_ready(struct cpufreq_policy *policy)
 		return;
 
 	if (of_find_property(np, "#cooling-cells", NULL)) {
-		info->cdev = of_cpufreq_cooling_register(np,
-							 policy->related_cpus);
+		u32 capacitance = cpumask_test_cpu(0, policy->related_cpus) ?
+			CAPACITANCE_CA53 : CAPACITANCE_CA57;
 
-		if (IS_ERR(info->cdev)) {
-			dev_err(info->cpu_dev,
-				"running cpufreq without cooling device: %ld\n",
-				PTR_ERR(info->cdev));
+		if (!info->cdev) {
+			info->cdev = of_cpufreq_power_cooling_register(np,
+				policy->related_cpus,
+				capacitance,
+				mtk_cpufreq_get_static);
 
-			info->cdev = NULL;
+			if (IS_ERR(info->cdev)) {
+				dev_err(info->cpu_dev,
+					"running cpufreq without cooling device: %ld\n",
+					PTR_ERR(info->cdev));
+					info->cdev = NULL;
+			}
 		}
 	}
 
@@ -460,7 +533,9 @@ static int mtk_cpufreq_exit(struct cpufreq_policy *policy)
 {
 	struct mtk_cpu_dvfs_info *info = policy->driver_data;
 
-	cpufreq_cooling_unregister(info->cdev);
+	if (info->cdev)
+		cpufreq_cooling_unregister(info->cdev);
+
 	dev_pm_opp_free_cpufreq_table(info->cpu_dev, &policy->freq_table);
 	mtk_cpu_dvfs_info_release(info);
 	kfree(info);
