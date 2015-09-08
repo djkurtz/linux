@@ -68,6 +68,7 @@
 #include <linux/slab.h>
 #include "xhci.h"
 #include "xhci-trace.h"
+#include "xhci-mtk.h"
 
 /*
  * Returns zero if the TRB isn't in this segment, otherwise it returns the DMA
@@ -3192,9 +3193,14 @@ static int queue_bulk_sg_tx(struct xhci_hcd *xhci, gfp_t mem_flags,
 
 		/* Set the TRB length, TD size, and interrupter fields. */
 		if (xhci->hci_version < 0x100) {
-			remainder = xhci_td_remainder(
+			if (xhci->quirks & XHCI_MTK_HOST) {
+				remainder = xhci_mtk_td_remainder_quirk(
+					running_total, trb_buff_len, urb);
+			} else {
+				remainder = xhci_td_remainder(
 					urb->transfer_buffer_length -
 					running_total);
+			}
 		} else {
 			remainder = xhci_v1_0_td_remainder(running_total,
 					trb_buff_len, total_packet_count, urb,
@@ -3365,9 +3371,14 @@ int xhci_queue_bulk_tx(struct xhci_hcd *xhci, gfp_t mem_flags,
 
 		/* Set the TRB length, TD size, and interrupter fields. */
 		if (xhci->hci_version < 0x100) {
-			remainder = xhci_td_remainder(
+			if (xhci->quirks & XHCI_MTK_HOST) {
+				remainder = xhci_mtk_td_remainder_quirk(
+					running_total, trb_buff_len, urb);
+			} else {
+				remainder = xhci_td_remainder(
 					urb->transfer_buffer_length -
 					running_total);
+			}
 		} else {
 			remainder = xhci_v1_0_td_remainder(running_total,
 					trb_buff_len, total_packet_count, urb,
@@ -3462,7 +3473,7 @@ int xhci_queue_ctrl_tx(struct xhci_hcd *xhci, gfp_t mem_flags,
 		field |= 0x1;
 
 	/* xHCI 1.0 6.4.1.2.1: Transfer Type field */
-	if (xhci->hci_version == 0x100) {
+	if ((xhci->hci_version == 0x100) || (xhci->quirks & XHCI_MTK_HOST)) {
 		if (urb->transfer_buffer_length > 0) {
 			if (setup->bRequestType & USB_DIR_IN)
 				field |= TRB_TX_TYPE(TRB_DATA_IN);
@@ -3486,8 +3497,14 @@ int xhci_queue_ctrl_tx(struct xhci_hcd *xhci, gfp_t mem_flags,
 		field = TRB_TYPE(TRB_DATA);
 
 	length_field = TRB_LEN(urb->transfer_buffer_length) |
-		xhci_td_remainder(urb->transfer_buffer_length) |
 		TRB_INTR_TARGET(0);
+
+	if (xhci->quirks & XHCI_MTK_HOST)
+		length_field |= xhci_mtk_td_remainder_quirk(0,
+				urb->transfer_buffer_length, urb);
+	else
+		length_field |= xhci_td_remainder(urb->transfer_buffer_length);
+
 	if (urb->transfer_buffer_length > 0) {
 		if (setup->bRequestType & USB_DIR_IN)
 			field |= TRB_DIR_IN;
@@ -3817,8 +3834,14 @@ static int xhci_queue_isoc_tx(struct xhci_hcd *xhci, gfp_t mem_flags,
 
 			/* Set the TRB length, TD size, & interrupter fields. */
 			if (xhci->hci_version < 0x100) {
-				remainder = xhci_td_remainder(
-						td_len - running_total);
+				if (xhci->quirks & XHCI_MTK_HOST) {
+					remainder = xhci_mtk_td_remainder_quirk(
+						running_total, trb_buff_len,
+						urb);
+				} else {
+					remainder = xhci_td_remainder(
+							td_len - running_total);
+				}
 			} else {
 				remainder = xhci_v1_0_td_remainder(
 						running_total, trb_buff_len,
