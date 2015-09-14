@@ -33,6 +33,9 @@ io_pgtable_init_table[IO_PGTABLE_NUM_FMTS] =
 	[ARM_64_LPAE_S1] = &io_pgtable_arm_64_lpae_s1_init_fns,
 	[ARM_64_LPAE_S2] = &io_pgtable_arm_64_lpae_s2_init_fns,
 #endif
+#ifdef CONFIG_IOMMU_IO_PGTABLE_SHORT
+	[ARM_SHORT_DESC] = &io_pgtable_arm_short_init_fns,
+#endif
 };
 
 struct io_pgtable_ops *alloc_io_pgtable_ops(enum io_pgtable_fmt fmt,
