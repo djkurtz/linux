@@ -61,7 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 static void per_cpu_cache_flush(void *arg)
 {
 	PVR_UNREFERENCED_PARAMETER(arg);
-	flush_cache_all();
+//	flush_cache_all();
 }
 
 void OSCPUOperation(PVRSRV_CACHE_OP uiCacheOp)
