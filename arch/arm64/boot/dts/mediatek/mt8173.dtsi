@@ -82,7 +82,7 @@
 		};
 
 		idle-states {
-			entry-method = "psci";
+			entry-method = "arm,psci";
 
 			CPU_SLEEP_0: cpu-sleep-0 {
 				compatible = "arm,idle-state";
@@ -163,12 +163,11 @@
 			#reset-cells = <1>;
 		};
 
-		syscfg_pctl_a: syscfg_pctl_a@10005000 {
-			compatible = "mediatek,mt8173-pctl-a-syscfg", "syscon";
-			reg = <0 0x10005000 0 0x1000>;
-		};
-
-		pio: pinctrl@0x10005000 {
+		/*
+		 * Pinctrl access register at 0x10005000 through regmap.
+		 * Register 0x1000b000 is used by EINT.
+		 */
+		pio: pinctrl@10005000 {
 			compatible = "mediatek,mt8173-pinctrl";
 			reg = <0 0x1000b000 0 0x1000>;
 			mediatek,pctl-regmap = <&syscfg_pctl_a>;
@@ -228,6 +227,11 @@
 					bias-disable;
 				};
 			};
+		};
+
+		syscfg_pctl_a: syscfg_pctl_a@10005000 {
+			compatible = "mediatek,mt8173-pctl-a-syscfg", "syscon";
+			reg = <0 0x10005000 0 0x1000>;
 		};
 
 		scpsys: scpsys@10006000 {
@@ -397,6 +401,17 @@
 			status = "disabled";
 		};
 
+		nor_flash: spi@1100d000 {
+			compatible = "mediatek,mt8173-nor";
+			reg = <0 0x1100d000 0 0xe0>;
+			clocks = <&pericfg CLK_PERI_SPI>,
+				 <&topckgen CLK_TOP_SPINFI_IFR_SEL>;
+			clock-names = "spi", "sf";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
 		i2c3: i2c@11010000 {
 			compatible = "mediatek,mt8173-i2c";
 			reg = <0 0x11010000 0 0x70>,
@@ -559,6 +574,33 @@
 				#phy-cells = <1>;
 				status = "okay";
 			};
+		};
+
+		gpu: mfgsys-gpu@13000000 {
+			compatible = "mediatek,mt8173-gpu";
+			reg = <0 0x13000000 0 0xffff>, <0 0x13fff000 0 0x1000>;
+			power-domains =	<&scpsys MT8173_POWER_DOMAIN_MFG>;
+			clocks = <&apmixedsys CLK_APMIXED_MMPLL>,
+				 <&topckgen CLK_TOP_MEM_MFG_IN_SEL>,
+				 <&topckgen CLK_TOP_AXI_MFG_IN_SEL>,
+				 <&topckgen CLK_TOP_AXI_SEL>,
+				 <&topckgen CLK_TOP_MEM_SEL>,
+				 <&topckgen CLK_TOP_MFG_SEL>;
+			clock-names = "mmpll_clk",
+				      "mfg_mem_in_sel",
+				      "mfg_axi_in_sel",
+				      "top_axi",
+				      "top_mem",
+				      "top_mfg";
+			interrupts = <0 217 IRQ_TYPE_LEVEL_LOW>;
+			interrupt-names = "RGX";
+			status = "disabled";
+		};
+
+		mfgsys: mfgsys@13fff000 {
+			compatible = "mediatek,mt8173-mfgsys", "syscon";
+			reg = <0 0x13fff000 0 0x1000>;
+			#clock-cells = <1>;
 		};
 
 		mmsys: clock-controller@14000000 {

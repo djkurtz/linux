@@ -17,8 +17,7 @@
 #include "mt8173.dtsi"
 
 / {
-	model = "MediaTek MT8173 evaluation board";
-	compatible = "mediatek,mt8173-evb", "mediatek,mt8173";
+	model = "mediatek,mt8173-evb";
 
 	aliases {
 		serial0 = &uart0;
