@@ -361,6 +361,7 @@
 			interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_LOW>;
 			clocks = <&infracfg CLK_INFRA_CLK_13M>,
 				 <&topckgen CLK_TOP_RTC_SEL>;
+			status = "disabled";
 		};
 
 		pwrap: pwrap@1000d000 {
