@@ -377,42 +377,26 @@ static int ps8640_probe(struct i2c_client *client,
 		return PTR_ERR(ps_bridge->pwr_1v2_supply);
 	}
 
-	ps_bridge->gpio_mode_sel_n = devm_gpiod_get(&client->dev, "mode-sel");
+	ps_bridge->gpio_mode_sel_n = devm_gpiod_get(&client->dev, "mode-sel",
+						    GPIOD_OUT_HIGH);
 	if (IS_ERR(ps_bridge->gpio_mode_sel_n)) {
 		ret = PTR_ERR(ps_bridge->gpio_mode_sel_n);
 		DRM_ERROR("cannot get gpio_mode_sel_n %d\n", ret);
 		return ret;
 	}
 
-	ret = gpiod_direction_output(ps_bridge->gpio_mode_sel_n, 1);
-	if (ret) {
-		DRM_ERROR("cannot configure gpio_mode_sel_n\n");
-		return ret;
-	}
-
-	ps_bridge->gpio_pwr_n = devm_gpiod_get(&client->dev, "power");
+	ps_bridge->gpio_pwr_n = devm_gpiod_get(&client->dev, "power",
+					       GPIOD_OUT_HIGH);
 	if (IS_ERR(ps_bridge->gpio_pwr_n)) {
 		ret = PTR_ERR(ps_bridge->gpio_pwr_n);
 		DRM_ERROR("cannot get gpio_pwr_n %d\n", ret);
 		return ret;
 	}
-
-	ret = gpiod_direction_output(ps_bridge->gpio_pwr_n, 1);
-	if (ret) {
-		DRM_ERROR("cannot configure gpio_pwr_n\n");
-		return ret;
-	}
-
-	ps_bridge->gpio_rst_n = devm_gpiod_get(&client->dev, "reset");
+	ps_bridge->gpio_rst_n = devm_gpiod_get(&client->dev, "reset",
+					       GPIOD_OUT_HIGH);
 	if (IS_ERR(ps_bridge->gpio_rst_n)) {
 		ret = PTR_ERR(ps_bridge->gpio_rst_n);
 		DRM_ERROR("cannot get gpio_rst_n %d\n", ret);
-		return ret;
-	}
-
-	ret = gpiod_direction_output(ps_bridge->gpio_rst_n, 1);
-	if (ret) {
-		DRM_ERROR("cannot configure gpio_rst_n\n");
 		return ret;
 	}
 
