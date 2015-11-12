@@ -1,0 +1,26 @@
+MediaTek CMDQ
+===============
+
+The Command Queue (CMDQ) is used to help read/write registers with critical
+time limitation, such as updating display configuration during the vblank.
+It controls Global Command Engine (GCE) hardware to achieve this requirement.
+Currently, CMDQ only supports display related hardwares, but we expect it can
+be extended to other hardwares for future requirements.
+
+Required properties:
+- compatible: Must be "mediatek,mt8173-gce"
+- reg: Address range of the GCE unit
+- interrupts: The interrupt signal from the GCE block
+- clock: Clocks according to the common clock binding
+- clock-names: Must be "gce" to stand for GCE clock
+
+Example:
+
+	gce: gce@10212000 {
+		compatible = "mediatek,mt8173-gce";
+		reg = <0 0x10212000 0 0x1000>;
+		interrupts = <GIC_SPI 135 IRQ_TYPE_LEVEL_LOW>;
+		clocks = <&infracfg CLK_INFRA_GCE>;
+		clock-names = "gce";
+	};
+
