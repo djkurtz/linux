@@ -1494,7 +1494,7 @@ _AllocOSPages_Fast(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData,
 
 	unsigned int gfp_flags = _GetGFPFlags(psPageArrayData);
 	IMG_UINT32 ui32GfpFlags;
-	IMG_UINT32 ui32HighOrderGfpFlags = ((gfp_flags & ~__GFP_WAIT) | __GFP_NORETRY);
+	IMG_UINT32 ui32HighOrderGfpFlags = ((gfp_flags & ~__GFP_RECLAIM) | __GFP_NORETRY);
 
 	struct page **ppsPageArray = psPageArrayData->pagearray;
 
