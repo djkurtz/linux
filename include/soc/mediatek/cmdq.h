@@ -207,6 +207,15 @@ int cmdq_rec_flush_async_callback(struct cmdq_rec *handle,
 				  void *done_data);
 
 /**
+ * cmdq_rec_dump_command() - dump command buffer to kernel log for debug
+ *
+ * @handle:	the command queue recorder handle
+ *
+ * Return: 0 for success; else the error code is returned
+ */
+int cmdq_rec_dump_command(struct cmdq_rec *handle);
+
+/**
  * cmdq_rec_destroy() - destroy command queue recorder handle
  * @handle:	the command queue recorder handle
  */
