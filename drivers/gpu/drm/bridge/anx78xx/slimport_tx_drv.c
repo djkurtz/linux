@@ -1316,8 +1316,9 @@ static int sp_tx_bw_lc_sel(struct anx78xx *anx78xx)
 
 	if (sp_get_link_bw(anx78xx) != link) {
 		sp.changed_bandwidth = link;
-		dev_dbg(dev,
-			"different bandwidth between sink and video %.2x",
+		dev_err(dev,
+			"different bandwidth between sink and video %.2x %.2x",
+			sp_get_link_bw(anx78xx), link);
 		return -1;
 	}
 	return 0;
@@ -2920,10 +2921,9 @@ static void sp_show_information(struct anx78xx *anx78xx)
 	if (h_res == 0 || v_res == 0) {
 		refresh = 0;
 	} else {
-		refresh = pclk * 1000;
-		refresh = refresh / h_res;
-		refresh = refresh * 1000;
-		refresh = refresh / v_res;
+		refresh = pclk * 1000000;
+		refresh = DIV_ROUND_CLOSEST(refresh, h_res);
+		refresh = DIV_ROUND_CLOSEST(refresh, v_res);
 	}
 
 	dev_dbg(dev, "active resolution is %d * %d @ %ldHz\n", h_act, v_act,
@@ -3060,9 +3060,10 @@ bool sp_main_process(struct anx78xx *anx78xx)
 		if (sp_hdcp_repeater_mode(anx78xx))
 			sp_hdcp_repeater_reauth(anx78xx);
 
-		if (!sp.hdcp_enabled)
+/*		if (!sp.hdcp_enabled) {
 			sp_set_system_state(anx78xx, STATE_HDCP_AUTH);
 			sp.hdcp_enabled = true;
+		}*/
 	}
 
 	/*
