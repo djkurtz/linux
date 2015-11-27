@@ -110,6 +110,11 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&aud_i2s2>;
 	};
+
+	sound-hdmi {
+		compatible = "mediatek,mt8173-hdmi-card";
+		mediatek,platform = <&afe>;
+	};
 };
 
 &cpu0 {
