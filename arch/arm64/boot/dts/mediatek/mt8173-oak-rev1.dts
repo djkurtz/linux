@@ -28,6 +28,30 @@
 	status = "disabled";
 };
 
+&cpu2 {
+	proc-supply = <&da9211_vcpu_reg>;
+	operating-points = <
+		507000  828000
+		702000  867000
+		1001000 927000
+		1209000 968000
+		1404000 1007000
+		1612000 1049000
+	>;
+};
+
+&cpu3 {
+	proc-supply = <&da9211_vcpu_reg>;
+	operating-points = <
+		507000  828000
+		702000  867000
+		1001000 927000
+		1209000 968000
+		1404000 1007000
+		1612000 1049000
+	>;
+};
+
 &gpu {
 	mfgsys-power-supply = <&da9211_vgpu_reg>;
 	operating-points = <
