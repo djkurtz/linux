@@ -51,4 +51,6 @@ config DRM_PARADE_PS8640
 	  The PS8640 is a high-performance and low-power
 	  MIPI DSI to eDP converter
 
+source "drivers/gpu/drm/bridge/anx78xx/Kconfig"
+
 endmenu
