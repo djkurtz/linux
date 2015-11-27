@@ -9,6 +9,7 @@ enum io_pgtable_fmt {
 	ARM_32_LPAE_S2,
 	ARM_64_LPAE_S1,
 	ARM_64_LPAE_S2,
+	ARM_SHORT_DESC,
 	IO_PGTABLE_NUM_FMTS,
 };
 
@@ -45,7 +46,10 @@ struct iommu_gather_ops {
  *                 page table walker.
  */
 struct io_pgtable_cfg {
-	#define IO_PGTABLE_QUIRK_ARM_NS	(1 << 0)	/* Set NS bit in PTEs */
+	#define IO_PGTABLE_QUIRK_ARM_NS		BIT(0) /* Set NS bit in PTEs */
+	#define IO_PGTABLE_QUIRK_NO_PERMS	BIT(1) /* No AP/XN bits */
+	#define IO_PGTABLE_QUIRK_TLBI_ON_MAP	BIT(2) /* TLB Inv. on map */
+	#define IO_PGTABLE_QUIRK_SHORT_SUPERSECTION	BIT(3)
 	int				quirks;
 	unsigned long			pgsize_bitmap;
 	unsigned int			ias;
@@ -65,6 +69,14 @@ struct io_pgtable_cfg {
 			u64	vttbr;
 			u64	vtcr;
 		} arm_lpae_s2_cfg;
+
+		struct {
+			u32	ttbr[2];
+			u32	tcr;
+			u32	nmrr;
+			u32	prrr;
+			u32	sctlr;
+		} arm_short_cfg;
 	};
 };
 
@@ -131,6 +143,9 @@ struct io_pgtable {
 	struct io_pgtable_ops	ops;
 };
 
+#define io_pgtable_ops_to_pgtable(x)		\
+	container_of((x), struct io_pgtable, ops)
+
 /**
  * struct io_pgtable_init_fns - Alloc/free a set of page tables for a
  *                              particular format.
@@ -147,5 +162,6 @@ extern struct io_pgtable_init_fns io_pgtable_arm_32_lpae_s1_init_fns;
 extern struct io_pgtable_init_fns io_pgtable_arm_32_lpae_s2_init_fns;
 extern struct io_pgtable_init_fns io_pgtable_arm_64_lpae_s1_init_fns;
 extern struct io_pgtable_init_fns io_pgtable_arm_64_lpae_s2_init_fns;
+extern struct io_pgtable_init_fns io_pgtable_arm_short_init_fns;
 
 #endif /* __IO_PGTABLE_H */

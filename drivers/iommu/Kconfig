@@ -39,6 +39,24 @@ config IOMMU_IO_PGTABLE_LPAE_SELFTEST
 
 	  If unsure, say N here.
 
+config IOMMU_IO_PGTABLE_SHORT
+	bool "ARMv7/v8 Short Descriptor Format"
+	select IOMMU_IO_PGTABLE
+	depends on HAS_DMA && (ARM || ARM64 || COMPILE_TEST)
+	help
+	  Enable support for the ARM Short-descriptor pagetable format.
+	  This allocator supports 2 levels of translation tables, which
+	  enables a 32-bit memory map based on memory sections or pages.
+
+config IOMMU_IO_PGTABLE_SHORT_SELFTEST
+	bool "Short Descriptor selftests"
+	depends on IOMMU_IO_PGTABLE_SHORT
+	help
+	  Enable self-tests for Short-descriptor page table allocator.
+	  This performs a series of page-table consistency checks during boot.
+
+	  If unsure, say N here.
+
 endmenu
 
 config IOMMU_IOVA
