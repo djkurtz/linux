@@ -78,3 +78,7 @@
 &mt6311 {
 	status = "disabled";
 };
+
+&ps8640_fixed_1v2 {
+	gpio = <&pio 30 GPIO_ACTIVE_HIGH>;
+};

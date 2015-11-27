@@ -30,3 +30,7 @@
 &bl_fixed_reg {
 	gpio = <&pio 29 GPIO_ACTIVE_HIGH>;
 };
+
+&ps8640_fixed_1v2 {
+	gpio = <&pio 30 GPIO_ACTIVE_HIGH>;
+};

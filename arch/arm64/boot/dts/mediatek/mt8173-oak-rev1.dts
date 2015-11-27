@@ -52,6 +52,10 @@
 	>;
 };
 
+&dsi0_out {
+	remote-endpoint = <&ite6151_in>;
+};
+
 &gpu {
 	mfgsys-power-supply = <&da9211_vgpu_reg>;
 	operating-points = <
@@ -91,6 +95,72 @@
 	};
 };
 
+&i2c3 {
+	ite6151: edp-bridge@5c {
+		compatible = "ite,it6151";
+		reg = <0x5c>;
+		rxreg = <0x6c>;
+		power-gpio = <&pio 30 GPIO_ACTIVE_HIGH>;
+		reset-gpio = <&pio 115 GPIO_ACTIVE_HIGH>;
+		disp-bdg-supply = <&mt6397_vgp2_reg>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		edid = [00 ff ff ff ff ff ff 00 0d ae 32 11 00 00 00 00
+			13 17 01 04 95 1a 0e 78 02 14 35 92 55 53 95 29
+			24 50 54 00 00 00 01 01 01 01 01 01 01 01 01 01
+			01 01 01 01 01 01 da 1d 56 e2 50 00 20 30 88 1e
+			8c 00 00 90 10 00 00 18 00 00 00 fe 00 4e 31 31
+			36 42 47 45 2d 45 41 32 0a 20 00 00 00 fe 00 43
+			4d 4e 0a 20 20 20 20 20 20 20 20 20 00 00 00 fe
+			00 4e 31 31 36 42 47 45 2d 45 41 32 0a 20 00 48];
+
+		port@0 {
+			reg = <0>;
+
+			ite6151_in: endpoint {
+				remote-endpoint = <&dsi0_out>;
+			};
+		};
+
+		port@1 {
+			reg = <1>;
+
+			ite6151_out: endpoint {
+				remote-endpoint = <&panel_in>;
+			};
+		};
+	};
+};
+
 &mt6311 {
+	status = "disabled";
+};
+
+&mt6397_vgp2_reg {
+	regulator-min-microvolt = <1800000>;
+	regulator-max-microvolt = <1800000>;
+};
+
+&panel {
+	/delete-property/ power-supply; /* Not used on oak-rev1 */
+	/delete-property/ ddc-i2c-bus; /* Not used on oak-rev1 */
+
+	port {
+		panel_in: endpoint {
+			remote-endpoint = <&ite6151_out>;
+		};
+	};
+};
+
+&panel_fixed_3v3 {
+	status = "disabled";
+};
+
+&ps8640 {
+	status = "disabled";
+};
+
+&ps8640_fixed_1v2 {
 	status = "disabled";
 };
