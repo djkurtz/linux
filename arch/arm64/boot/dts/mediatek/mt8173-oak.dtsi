@@ -146,7 +146,7 @@
 	status = "okay";
 };
 
-&hdmi_phy {
+&hdmi_pll {
 	mediatek,ibias = <0x2e>;
 };
 
