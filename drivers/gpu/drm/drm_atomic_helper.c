@@ -2023,6 +2023,7 @@ int drm_atomic_helper_page_flip(struct drm_crtc *crtc,
 	struct drm_atomic_state *state;
 	struct drm_plane_state *plane_state;
 	struct drm_crtc_state *crtc_state;
+	struct drm_framebuffer *old_fb;
 	int ret = 0;
 
 	if (flags & DRM_MODE_PAGE_FLIP_ASYNC)
@@ -2050,11 +2051,16 @@ retry:
 	ret = drm_atomic_set_crtc_for_plane(plane_state, crtc);
 	if (ret != 0)
 		goto fail;
-	drm_atomic_set_fb_for_plane(plane_state, fb);
+	old_fb = plane_state->fb;
+	if (fb)
+		drm_framebuffer_reference(fb);
+	plane_state->fb = fb;
 
-	ret = drm_atomic_async_commit(state);
+	ret = drm_atomic_commit(state);
 	if (ret != 0)
 		goto fail;
+	if (old_fb)
+		drm_framebuffer_unreference(old_fb);
 
 	/* Driver takes ownership of state on successful async commit. */
 	return 0;
