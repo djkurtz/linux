@@ -19,6 +19,7 @@
 #include <linux/clk.h>
 #include <linux/pm_runtime.h>
 #include <soc/mediatek/smi.h>
+#include <soc/mediatek/cmdq.h>
 
 #include "mtk_drm_drv.h"
 #include "mtk_drm_crtc.h"
@@ -54,6 +55,14 @@ struct mtk_drm_crtc {
 	bool				do_flush;
 	bool				pending_needs_vblank;
 	struct drm_pending_vblank_event	*event;
+	bool				cursor_disabled;
+
+	bool				cmdq_busy;
+	bool				cmdq_wait;
+	int				cmdq_scenario;
+	int				cmdq_event;
+	struct cmdq_rec			*cmdq_handle;
+	struct cmdq_rec			*cmdq_flush;
 
 	struct mtk_drm_plane		planes[OVL_LAYER_NR];
 
@@ -110,15 +119,6 @@ static void mtk_drm_crtc_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
 	drm_crtc_vblank_put(crtc);
 	mtk_crtc->event = NULL;
 	spin_unlock_irqrestore(&crtc->dev->event_lock, flags);
-}
-
-static void mtk_drm_finish_page_flip(struct mtk_drm_crtc *mtk_crtc)
-{
-	drm_handle_vblank(mtk_crtc->base.dev, mtk_crtc->pipe);
-	if (mtk_crtc->pending_needs_vblank) {
-		mtk_drm_crtc_finish_page_flip(mtk_crtc);
-		mtk_crtc->pending_needs_vblank = false;
-	}
 }
 
 static void mtk_drm_crtc_destroy(struct drm_crtc *crtc)
@@ -190,7 +190,7 @@ int mtk_drm_crtc_enable_vblank(struct drm_device *drm, unsigned int pipe)
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(priv->crtc[pipe]);
 	struct mtk_ddp_comp *ovl = mtk_crtc->ddp_comp[0];
 
-	mtk_ddp_comp_enable_vblank(ovl);
+	mtk_ddp_comp_enable_vblank(ovl, mtk_crtc->cmdq_handle);
 
 	return 0;
 }
@@ -201,7 +201,7 @@ void mtk_drm_crtc_disable_vblank(struct drm_device *drm, unsigned int pipe)
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(priv->crtc[pipe]);
 	struct mtk_ddp_comp *ovl = mtk_crtc->ddp_comp[0];
 
-	mtk_ddp_comp_disable_vblank(ovl);
+	mtk_ddp_comp_disable_vblank(ovl, mtk_crtc->cmdq_handle);
 }
 
 static int mtk_crtc_ddp_power_on(struct mtk_drm_crtc *mtk_crtc)
@@ -282,8 +282,9 @@ static int mtk_crtc_ddp_hw_init(struct mtk_drm_crtc *mtk_crtc)
 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++) {
 		struct mtk_ddp_comp *comp = mtk_crtc->ddp_comp[i];
 
-		mtk_ddp_comp_config(comp, width, height, vrefresh);
-		mtk_ddp_comp_start(comp);
+		mtk_ddp_comp_config(comp, width, height, vrefresh,
+				    mtk_crtc->cmdq_handle);
+		mtk_ddp_comp_start(comp, mtk_crtc->cmdq_handle);
 	}
 
 	return 0;
@@ -302,7 +303,7 @@ static void mtk_crtc_ddp_hw_fini(struct mtk_drm_crtc *mtk_crtc)
 
 	DRM_DEBUG_DRIVER("%s\n", __func__);
 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++)
-		mtk_ddp_comp_stop(mtk_crtc->ddp_comp[i]);
+		mtk_ddp_comp_stop(mtk_crtc->ddp_comp[i], mtk_crtc->cmdq_handle);
 	for (i = 0; i < mtk_crtc->ddp_comp_nr; i++)
 		mtk_disp_mutex_remove_comp(mtk_crtc->mutex,
 					   mtk_crtc->ddp_comp[i]->id);
@@ -319,6 +320,66 @@ static void mtk_crtc_ddp_hw_fini(struct mtk_drm_crtc *mtk_crtc)
 	mtk_disp_mutex_unprepare(mtk_crtc->mutex);
 
 	pm_runtime_put(drm->dev);
+}
+
+void mtk_crtc_plane_config(struct mtk_drm_plane *plane,
+			   struct mtk_plane_state *state)
+{
+	struct mtk_drm_crtc *mtk_crtc;
+	struct mtk_ddp_comp *ovl;
+
+	if (state->base.crtc)
+		mtk_crtc = to_mtk_crtc(state->base.crtc);
+	else if (plane->base.crtc)
+		mtk_crtc = to_mtk_crtc(plane->base.crtc);
+	else
+		DRM_ERROR("plane config w/o crtc\n");
+
+	ovl = mtk_crtc->ddp_comp[0];
+
+	if (!state->pending.enable) {
+		mtk_ddp_comp_layer_off(ovl, plane->idx, mtk_crtc->cmdq_handle);
+		mtk_crtc->cursor_disabled = true;
+	}
+
+	mtk_ddp_comp_layer_config(ovl, plane->idx, state, mtk_crtc->cmdq_handle);
+
+	if (state->pending.enable) {
+		mtk_ddp_comp_layer_on(ovl, plane->idx, mtk_crtc->cmdq_handle);
+		mtk_crtc->cursor_disabled = false;
+	}
+}
+
+static void ddp_cmdq_new_event(void *data)
+{
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(data);
+	struct mtk_drm_private *priv = mtk_crtc->base.dev->dev_private;
+	struct platform_device *pdev = priv->gce_pdev;
+
+	if (mtk_crtc->enabled && !mtk_crtc->cmdq_wait) {
+		mtk_crtc->cmdq_wait = true;
+		cmdq_rec_create(pdev, mtk_crtc->cmdq_scenario,
+				&mtk_crtc->cmdq_handle);
+		cmdq_rec_wait(mtk_crtc->cmdq_handle, mtk_crtc->cmdq_event);
+	}
+}
+
+static int ddp_cmdq_cb(void *data)
+{
+	struct drm_crtc *crtc = data;
+	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
+
+	mtk_crtc->cmdq_busy = false;
+
+	if (mtk_crtc->pending_needs_vblank) {
+		mtk_drm_crtc_finish_page_flip(mtk_crtc);
+		mtk_crtc->pending_needs_vblank = false;
+	}
+
+	if (mtk_crtc->cursor_disabled)
+		mtk_crtc->cursor_disabled = false;
+
+	return 0;
 }
 
 static void mtk_drm_crtc_enable(struct drm_crtc *crtc)
@@ -343,6 +404,8 @@ static void mtk_drm_crtc_enable(struct drm_crtc *crtc)
 
 	drm_crtc_vblank_on(crtc);
 	mtk_crtc->enabled = true;
+
+	mtk_drm_crtc_check_flush(crtc);
 }
 
 static void mtk_drm_crtc_disable(struct drm_crtc *crtc)
@@ -350,6 +413,8 @@ static void mtk_drm_crtc_disable(struct drm_crtc *crtc)
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 	struct mtk_ddp_comp *ovl = mtk_crtc->ddp_comp[0];
 	int i;
+	struct mtk_drm_private *priv = crtc->dev->dev_private;
+	struct platform_device *pdev = priv->gce_pdev;
 
 	DRM_DEBUG_DRIVER("%s %d\n", __func__, crtc->base.id);
 	if (WARN_ON(!mtk_crtc->enabled))
@@ -367,6 +432,7 @@ static void mtk_drm_crtc_disable(struct drm_crtc *crtc)
 
 	/* Wait for planes to be disabled */
 	drm_crtc_wait_one_vblank(crtc);
+	cmdq_rec_create(pdev, mtk_crtc->cmdq_scenario, &mtk_crtc->cmdq_handle);
 
 	drm_crtc_vblank_off(crtc);
 	mtk_crtc_ddp_hw_fini(mtk_crtc);
@@ -391,33 +457,33 @@ static void mtk_drm_crtc_atomic_begin(struct drm_crtc *crtc,
 		mtk_crtc->event = state->base.event;
 		state->base.event = NULL;
 	}
+
+	ddp_cmdq_new_event(crtc);
 }
 
 void mtk_drm_crtc_commit(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
-	unsigned int i;
+	struct cmdq_rec *handle = mtk_crtc->cmdq_flush;
 
-	for (i = 0; i < OVL_LAYER_NR; i++) {
-		struct drm_plane *plane = &mtk_crtc->planes[i].base;
-		struct mtk_plane_state *plane_state;
-
-		plane_state = to_mtk_plane_state(plane->state);
-		if (plane_state->pending.dirty) {
-			plane_state->pending.config = true;
-			plane_state->pending.dirty = false;
-		}
-	}
+	mtk_crtc->cmdq_flush = NULL;
+	mtk_crtc->cmdq_wait = false;
+	mtk_crtc->cmdq_busy = true;
+	cmdq_rec_flush_async_callback(handle, ddp_cmdq_cb, crtc, NULL, NULL);
+	cmdq_rec_destroy(handle);
 }
 
 void mtk_drm_crtc_check_flush(struct drm_crtc *crtc)
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 
-	if (mtk_crtc->do_flush) {
+	if (mtk_crtc->do_flush && mtk_crtc->enabled) {
 		if (mtk_crtc->event)
 			mtk_crtc->pending_needs_vblank = true;
-		mtk_drm_crtc_commit(crtc);
+		if (!mtk_crtc->cmdq_busy)
+			mtk_drm_crtc_commit(crtc);
+		else if (mtk_crtc->cursor_disabled)
+			mtk_drm_crtc_commit(crtc);
 		mtk_crtc->do_flush = false;
 	}
 }
@@ -427,6 +493,11 @@ static void mtk_drm_crtc_atomic_flush(struct drm_crtc *crtc,
 {
 	struct mtk_drm_crtc *mtk_crtc = to_mtk_crtc(crtc);
 
+	if (mtk_crtc->cmdq_flush &&
+	    mtk_crtc->cmdq_flush != mtk_crtc->cmdq_handle)
+		DRM_ERROR("%p not commit\n", mtk_crtc->cmdq_flush);
+
+	mtk_crtc->cmdq_flush = mtk_crtc->cmdq_handle;
 	mtk_crtc->do_flush = true;
 	mtk_drm_crtc_check_flush(crtc);
 }
@@ -475,54 +546,16 @@ void mtk_crtc_ddp_irq(struct drm_device *drm_dev, struct mtk_ddp_comp *ovl)
 {
 	struct mtk_drm_private *priv = drm_dev->dev_private;
 	struct mtk_drm_crtc *mtk_crtc;
-	struct mtk_crtc_state *state;
-	unsigned int i;
-
 	mtk_crtc = mtk_crtc_by_comp(priv, ovl);
-	if (WARN_ON(!mtk_crtc))
-		return;
 
-	state = to_mtk_crtc_state(mtk_crtc->base.state);
-
-	/*
-	 * TODO: instead of updating the registers here, we should prepare
-	 * working registers in atomic_commit and let the hardware command
-	 * queue update module registers on vblank.
-	 */
-	if (state->pending_config) {
-		mtk_ddp_comp_config(ovl, state->pending_width,
-				    state->pending_height,
-				    state->pending_vrefresh);
-
-		state->pending_config = false;
-	}
-
-	for (i = 0; i < OVL_LAYER_NR; i++) {
-		struct drm_plane *plane = &mtk_crtc->planes[i].base;
-		struct mtk_plane_state *plane_state;
-
-		plane_state = to_mtk_plane_state(plane->state);
-
-		if (plane_state->pending.config) {
-			if (!plane_state->pending.enable)
-				mtk_ddp_comp_layer_off(ovl, i);
-
-			mtk_ddp_comp_layer_config(ovl, i, plane_state);
-
-			if (plane_state->pending.enable)
-				mtk_ddp_comp_layer_on(ovl, i);
-
-			plane_state->pending.config = false;
-		}
-	}
-
-	mtk_drm_finish_page_flip(mtk_crtc);
+	drm_handle_vblank(mtk_crtc->base.dev, mtk_crtc->pipe);
 }
 
 int mtk_drm_crtc_create(struct drm_device *drm_dev,
 			const enum mtk_ddp_comp_id *path, unsigned int path_len)
 {
 	struct mtk_drm_private *priv = drm_dev->dev_private;
+	struct platform_device *pdev = priv->gce_pdev;
 	struct device *dev = drm_dev->dev;
 	struct mtk_drm_crtc *mtk_crtc;
 	enum drm_plane_type type;
@@ -588,6 +621,15 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 
 	priv->crtc[pipe] = &mtk_crtc->base;
 	priv->num_pipes++;
+
+	if (mtk_crtc->pipe == 0) {
+		mtk_crtc->cmdq_scenario = CMDQ_SCENARIO_PRIMARY_DISP;
+		mtk_crtc->cmdq_event = CMDQ_EVENT_MUTEX0_STREAM_EOF;
+	} else {
+		mtk_crtc->cmdq_scenario = CMDQ_SCENARIO_SUB_DISP;
+		mtk_crtc->cmdq_event = CMDQ_EVENT_MUTEX1_STREAM_EOF;
+	}
+	cmdq_rec_create(pdev, mtk_crtc->cmdq_scenario, &mtk_crtc->cmdq_handle);
 
 	return 0;
 

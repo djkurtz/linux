@@ -36,6 +36,7 @@ struct mtk_drm_private {
 	struct drm_property *plane_zpos_property;
 	unsigned int num_pipes;
 
+	struct platform_device *gce_pdev;
 	struct device_node *mutex_node;
 	struct device *mutex_dev;
 	void __iomem *config_regs;

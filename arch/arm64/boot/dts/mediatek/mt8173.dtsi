@@ -837,6 +837,7 @@
 			/* FIXME - remove iommus here */
 			iommus = <&iommu M4U_LARB0_ID M4U_PORT_DISP_OVL0>,
 				 <&iommu M4U_LARB4_ID M4U_PORT_DISP_OVL1>;
+			mediatek,gce = <&gce>;
 		};
 
 		ovl0: ovl@1400c000 {

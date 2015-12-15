@@ -8,6 +8,7 @@ config DRM_MEDIATEK
 	select DRM_PANEL_SIMPLE
 	select DRM_KMS_HELPER
 	select IOMMU_DMA
+	select MTK_CMDQ
 	help
 	  Choose this option if you have a Mediatek SoCs.
 	  The module will be called mediatek-drm

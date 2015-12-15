@@ -29,4 +29,6 @@ int mtk_drm_crtc_create(struct drm_device *drm_dev,
 			const enum mtk_ddp_comp_id *path,
 			unsigned int path_len);
 
+void mtk_crtc_plane_config(struct mtk_drm_plane *plane,
+			   struct mtk_plane_state *state);
 #endif /* MTK_DRM_CRTC_H */

@@ -72,7 +72,8 @@ static void mtk_plane_config(struct mtk_drm_plane *mtk_plane, bool enable,
 	state->pending.y = y;
 	state->pending.width = dest->x2 - dest->x1;
 	state->pending.height = dest->y2 - dest->y1;
-	state->pending.dirty = true;
+
+	mtk_crtc_plane_config(mtk_plane, state);
 }
 
 static void mtk_plane_reset(struct drm_plane *plane)

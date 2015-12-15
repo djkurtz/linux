@@ -60,18 +60,21 @@ enum mtk_ddp_comp_id {
 };
 
 struct mtk_ddp_comp;
-
+struct cmdq_rec;
 struct mtk_ddp_comp_funcs {
 	void (*config)(void __iomem *base, unsigned int w, unsigned int h,
-		       unsigned int vrefresh);
-	void (*start)(struct mtk_ddp_comp *comp);
-	void (*stop)(struct mtk_ddp_comp *comp);
-	void (*enable_vblank)(void __iomem *base);
-	void (*disable_vblank)(void __iomem *base);
-	void (*layer_on)(void __iomem *base, unsigned int idx);
-	void (*layer_off)(void __iomem *base, unsigned int idx);
+		       unsigned int vrefresh, struct cmdq_rec *handle);
+	void (*start)(struct mtk_ddp_comp *comp, struct cmdq_rec *handle);
+	void (*stop)(struct mtk_ddp_comp *comp, struct cmdq_rec *handle);
+	void (*enable_vblank)(void __iomem *base, struct cmdq_rec *handle);
+	void (*disable_vblank)(void __iomem *base, struct cmdq_rec *handle);
+	void (*layer_on)(void __iomem *base, unsigned int idx,
+			 struct cmdq_rec *handle);
+	void (*layer_off)(void __iomem *base, unsigned int idx,
+			  struct cmdq_rec *handle);
 	void (*layer_config)(void __iomem *base, unsigned int idx,
-			     struct mtk_plane_state *state);
+			     struct mtk_plane_state *state,
+			     struct cmdq_rec *handle);
 };
 
 struct mtk_ddp_comp {
@@ -85,56 +88,64 @@ struct mtk_ddp_comp {
 
 static inline void mtk_ddp_comp_config(struct mtk_ddp_comp *comp,
 				       unsigned int w, unsigned int h,
-				       unsigned int vrefresh)
+				       unsigned int vrefresh,
+				       struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->config)
-		comp->funcs->config(comp->regs, w, h, vrefresh);
+		comp->funcs->config(comp->regs, w, h, vrefresh, handle);
 }
 
-static inline void mtk_ddp_comp_start(struct mtk_ddp_comp *comp)
+static inline void mtk_ddp_comp_start(struct mtk_ddp_comp *comp,
+				      struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->start)
-		comp->funcs->start(comp);
+		comp->funcs->start(comp, handle);
 }
 
-static inline void mtk_ddp_comp_stop(struct mtk_ddp_comp *comp)
+static inline void mtk_ddp_comp_stop(struct mtk_ddp_comp *comp,
+				     struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->stop)
-		comp->funcs->stop(comp);
+		comp->funcs->stop(comp, handle);
 }
 
-static inline void mtk_ddp_comp_enable_vblank(struct mtk_ddp_comp *comp)
+static inline void mtk_ddp_comp_enable_vblank(struct mtk_ddp_comp *comp,
+					      struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->enable_vblank)
-		comp->funcs->enable_vblank(comp->regs);
+		comp->funcs->enable_vblank(comp->regs, handle);
 }
 
-static inline void mtk_ddp_comp_disable_vblank(struct mtk_ddp_comp *comp)
+static inline void mtk_ddp_comp_disable_vblank(struct mtk_ddp_comp *comp,
+					       struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->disable_vblank)
-		comp->funcs->disable_vblank(comp->regs);
+		comp->funcs->disable_vblank(comp->regs, handle);
 }
 
 static inline void mtk_ddp_comp_layer_on(struct mtk_ddp_comp *comp,
-					 unsigned int idx)
+					 unsigned int idx,
+					 struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->layer_on)
-		comp->funcs->layer_on(comp->regs, idx);
+		comp->funcs->layer_on(comp->regs, idx, handle);
 }
 
 static inline void mtk_ddp_comp_layer_off(struct mtk_ddp_comp *comp,
-					  unsigned int idx)
+					  unsigned int idx,
+					  struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->layer_off)
-		comp->funcs->layer_off(comp->regs, idx);
+		comp->funcs->layer_off(comp->regs, idx, handle);
 }
 
 static inline void mtk_ddp_comp_layer_config(struct mtk_ddp_comp *comp,
 					     unsigned int idx,
-					     struct mtk_plane_state *state)
+					     struct mtk_plane_state *state,
+					     struct cmdq_rec *handle)
 {
 	if (comp->funcs && comp->funcs->layer_config)
-		comp->funcs->layer_config(comp->regs, idx, state);
+		comp->funcs->layer_config(comp->regs, idx, state, handle);
 }
 
 int mtk_ddp_comp_get_id(struct device_node *node,

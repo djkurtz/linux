@@ -378,6 +378,19 @@ static int mtk_drm_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	node = of_parse_phandle(dev->of_node, "mediatek,gce", 0);
+	if (!node) {
+		dev_err(dev, "Failed to get gce node\n");
+		return -EINVAL;
+	}
+
+	private->gce_pdev = of_find_device_by_node(node);
+	of_node_put(node);
+	if (!private->gce_pdev) {
+		dev_err(dev, "Failed to find gce platform device\n");
+		return -EINVAL;
+	}
+
 	/* Iterate over sibling DISP function blocks */
 	for_each_child_of_node(dev->of_node->parent, node) {
 		const struct of_device_id *of_id;
