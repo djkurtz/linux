@@ -640,7 +640,7 @@ static int cmdq_core_task_realloc_buffer_size(struct cmdq_task *task, u32 size)
 
 	/* allocate new buffer, try if we can alloc without reclaim */
 	new_buf = cmdq_core_alloc_hw_buffer(
-		dev, size, &new_mva_base, GFP_KERNEL | __GFP_NO_KSWAPD);
+		dev, size, &new_mva_base, GFP_KERNEL); // | __GFP_NO_KSWAPD);
 
 	/* if failed, try emergency buffer */
 	if (!new_buf && size <= CMDQ_EMERGENCY_BLOCK_SIZE)
