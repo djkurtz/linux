@@ -29,7 +29,6 @@
 
 	backlight_lcd: backlight_lcd {
 		compatible = "pwm-backlight";
-		pwms = <&pwm0 0 1000000>;
 		brightness-levels = <
 			  0  16  32  48  64  80  96 112
 			128 144 160 176 192 208 224 240
@@ -127,10 +126,6 @@
 	};
 };
 
-&cec {
-	status = "okay";
-};
-
 &cpu0 {
 	proc-supply = <&mt6397_vpca15_reg>;
 };
@@ -147,33 +142,6 @@
 &cpu3 {
 	proc-supply = <&da9211_vcpu_reg>;
 	sram-supply = <&mt6397_vsramca7_reg>;
-};
-
-&cpu_thermal {
-	sustainable-power = <5000>; /* milliwatts */
-};
-
-&dpi0 {
-	status = "okay";
-};
-
-&hdmi0 {
-	status = "okay";
-
-	ports {
-		port@1 {
-			reg = <1>;
-
-			hdmi0_out: endpoint {
-				remote-endpoint = <&anx7814_in>;
-			};
-		};
-	};
-};
-
-&hdmi_phy {
-	status = "okay";
-	mediatek,ibias = <0x3f>;
 };
 
 &i2c0 {
@@ -265,11 +233,9 @@
 		v10-gpios = <&pio 35 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&anx7814_pins>;
-		ddc-i2c-bus = <&hdmiddc0>;
 
 		port {
 			anx7814_in: endpoint {
-				remote-endpoint = <&hdmi0_out>;
 			};
 		};
 	};
@@ -364,19 +330,6 @@
 0x01 0x00 0x07 0x00 0x14 0x00 0x01 0x00 0x00 0x00 0x12 0x00 0x02 0x00 0x01 0x00
 0x01 0x00 0x00 0x00 0x12 0x00 0x02 0x00 0x01 0x00
                 >;
-	};
-};
-
-&nor_flash {
-	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&nor_gpio1_pins>;
-	bus-width = <8>;
-	max-frequency = <50000000>;
-	non-removable;
-	flash@0 {
-		compatible = "jedec,spi-nor";
-		reg = <0>;
 	};
 };
 
@@ -684,10 +637,6 @@
 	};
 };
 
-&pwm0 {
-	status = "okay";
-};
-
 &pwrap {
 	pmic: mt6397 {
 		compatible = "mediatek,mt6397";
@@ -946,13 +895,6 @@
 
 &uart0 {
 	status = "okay";
-};
-
-&usb30 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&usb_pins>;
-	vusb33-supply = <&mt6397_vusb_reg>;
-	mediatek,wakeup-src = <1>;
 };
 
 #include "../../../../arm/boot/dts/cros-ec-keyboard.dtsi"

@@ -19,11 +19,9 @@
 		compatible = "hdmi-connector";
 		label = "hdmi";
 		type = "a";
-		ddc-i2c-bus = <&hdmiddc0>;
 
 		port {
 			hdmi_connector_in: endpoint {
-				remote-endpoint = <&hdmi0_out>;
 			};
 		};
 	};
@@ -42,19 +40,6 @@
 	};
 };
 
-&cpu_thermal {
-	sustainable-power = <4500>; /* milliwatts */
-	trips {
-		threshold: trip-point@0 {
-			temperature = <60000>;
-		};
-
-		target: trip-point@1 {
-			temperature = <65000>;
-		};
-	};
-};
-
 &cros_ec {
 	i2c_tunnel_b: i2c-tunnel@1 {
 		compatible = "google,cros-ec-i2c-tunnel";
@@ -62,21 +47,6 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 	};
-};
-
-&hdmi0 {
-	ports {
-		port@1 {
-			hdmi0_out: endpoint {
-				remote-endpoint = <&hdmi_connector_in>;
-			};
-		};
-	};
-};
-
-&hdmi_phy {
-	status = "okay";
-	mediatek,ibias = <0xc>;
 };
 
 &i2c_tunnel {
